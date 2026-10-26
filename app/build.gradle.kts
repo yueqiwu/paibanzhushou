@@ -45,9 +45,11 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+            // 关闭 R8 优化：AGP 的 packageScope 优化会在 1.0.4 上触发
+            // kotlin.collections 的 IllegalAccessError（Class kotlin.collections.f extended
+            // by class jg is inaccessible），正式包以稳定为先，保持不混淆。
             optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
+                enable = false
             }
         }
     }
