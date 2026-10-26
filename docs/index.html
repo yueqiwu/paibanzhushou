@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>排班助手 · 轮班族的排班日历（Android）</title>
+<meta name="description" content="排班助手：设定一次排班周期，日历自动铺满，任意年份随时查看；支持多人排班、同事对比表、单日微调、节假日调休与农历节气。Android 原生版，免费无广告。">
+<meta name="theme-color" content="#eef3fb">
+<meta property="og:title" content="排班助手 · 轮班族的排班日历">
+<meta property="og:description" content="设定一次排班周期，日历自动铺满，任意年份随时查看。Android 原生版，免费无广告。">
+<meta property="og:image" content="./img/logo.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="./img/icon.png">
+<link rel="apple-touch-icon" href="./img/icon.png">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="./">
+      <img src="./img/icon.png" alt="排班助手图标">
+      排班助手
+    </a>
+    <nav class="nav-links">
+      <a href="#features">功能</a>
+      <a href="#shots">截图</a>
+      <a href="#start">上手</a>
+      <a href="#download">下载</a>
+      <a href="#faq">常见问题</a>
+    </nav>
+    <a class="nav-cta" href="https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.4/paibanzhushou-1.0.4.apk">下载 APK</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <span class="eyebrow"><span class="dot"></span>Android 原生版 · v1.0.4</span>
+      <h1>把排班表<br><span class="grad">装进手机日历</span></h1>
+      <p class="lead">设置一次「排班周期 + 锚点日期」，之后每一天的班次都会自动排好。<em>任意年份</em>都能翻，<em>多个人</em>一起管，还能一键对比同事这个月都上什么班。</p>
+      <div class="actions">
+        <a class="btn" href="https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.4/paibanzhushou-1.0.4.apk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M5 21h14"/></svg>
+          下载 Android 版
+        </a>
+        <a class="btn ghost" href="https://github.com/yueqiwu/paibanzhushou" target="_blank" rel="noopener">查看源码</a>
+      </div>
+      <div class="meta">
+        <span><i></i>8.2 MB</span>
+        <span><i></i>Android 7.0 及以上</span>
+        <span><i></i>免费 · 无广告 · 无需登录</span>
+      </div>
+    </div>
+
+    <div class="hero-phone">
+      <div class="phone main"><img src="./img/shot-home.jpg" alt="排班助手首页与排班日历"></div>
+      <div class="float-chip chip-1">周期自动循环</div>
+      <div class="float-chip chip-2">任意年份可查</div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <h2>为轮班的人做的日历</h2>
+        <p>不是普通日历，而是「按周期自动长出来」的排班表</p>
+      </div>
+      <div class="grid">
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.3-6.4L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.3 6.4L3 16"/><path d="M3 21v-5h5"/></svg></div>
+          <h3>周期排班，一次设置长期可用</h3>
+          <p>设定排班周期（如 白班 / 中班 / 休息 / 休息）与锚点日期，之后每天按顺序无限循环，不用再一个月一个月地排。</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 0 0 0 8c2 0 4-1.33 6-4Z"/><path d="M12 12c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z"/></svg></div>
+          <h3>任意年份随时翻</h3>
+          <p>不再限制前后一年，往前往后翻到任何年份、任何月份，班次都能正常显示。</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18"/><path d="M9 9v11"/></svg></div>
+          <h3>同事排班对比表</h3>
+          <p>一张表看完所有人的整月班次，左右滑动看全员，上下滑动看整月，今天一行自动高亮并滚动到眼前。</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M17.5 14.4A6.5 6.5 0 0 1 21.5 20"/></svg></div>
+          <h3>多人员独立配置</h3>
+          <p>每个人一套班次、周期与锚点日期；长按人员名称可以拖拽排序，点 × 可以删除。</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+          <h3>单日微调</h3>
+          <p>临时调班只需点一下日期，单独指定当天的班次，或者清除这一天的设置，周期本身不受影响。</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M3 11h18"/><path d="m9 16 2 2 4-4"/></svg></div>
+          <h3>周末 / 节假日自动休息</h3>
+          <p>指定某些班次落在周六日或节假日时自动变休息，法定假与调休上班日会以「假 / 班」角标标注。</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></div>
+          <h3>农历 · 节气 · 节日</h3>
+          <p>每个格子里都有农历日期，传统节日、二十四节气、公历节日都一样不少，今天会显示「今日」。</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+          <h3>本地保存，不上传</h3>
+          <p>排班数据只存在你自己的手机里，不注册、不登录、不联网也能看，除节假日标记外无需网络。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="shots">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <h2>界面实拍</h2>
+        <p>浅色渐变背景、毛玻璃卡片、圆角药丸标签，与旧版保持同一套设计语言</p>
+      </div>
+      <div class="shots">
+        <figure class="shot reveal">
+          <div class="phone"><img src="./img/shot-home.jpg" alt="首页排班日历"></div>
+          <figcaption>排班日历 · 班次打点 + 图例 + 农历</figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="phone"><img src="./img/shot-config.jpg" alt="排班设置"></div>
+          <figcaption>排班设置 · 班次 / 周期 / 自动休息</figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="phone"><img src="./img/shot-table.jpg" alt="同事排班表"></div>
+          <figcaption>同事排班表 · 整月对比</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <h2>三步用起来</h2>
+        <p>第一次打开是「默认人员」，把名字和班次改成自己的就行</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <h3>下载并安装</h3>
+          <p>下载 APK，在手机上允许「安装未知来源应用」，装好后打开即可。</p>
+        </div>
+        <div class="step reveal">
+          <h3>设置班次与周期</h3>
+          <p>点「展开」进入排班设置：改人员名称、增删班次、按顺序填好排班周期，选好锚点日期，点「保存并生成」。</p>
+        </div>
+        <div class="step reveal">
+          <h3>查看与对比</h3>
+          <p>回到日历页左右滑动翻月，上下滑动翻年份；点某一天可以单独改班次。想看同事就点「对比同事排班」。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="download reveal">
+        <h2>下载排班助手</h2>
+        <p>Android 原生版本，安装包约 8.2 MB。免费使用，无广告、无内购、无需注册。</p>
+        <a class="btn" href="https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.4/paibanzhushou-1.0.4.apk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M5 21h14"/></svg>
+          下载 paibanzhushou-1.0.4.apk
+        </a>
+        <div class="dl-meta">
+          <span>版本 1.0.4（versionCode 104）</span>
+          <span>8,575,654 字节</span>
+          <span>Android 7.0+</span>
+          <span>正式签名版</span>
+        </div>
+        <div class="hash">SHA-256：58a4c15ec9ff654985d66383b40a4d0239854b474b2179a7ea040df8d0e59928</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <h2>常见问题</h2>
+        <p>装之前可能想知道的几件事</p>
+      </div>
+      <div class="faq">
+        <details class="reveal">
+          <summary>排班数据存在哪里？会联网上传吗？</summary>
+          <p>只保存在手机本地的应用数据里，不会上传到任何服务器，也不需要注册账号。卸载应用会一并删除这些数据。</p>
+        </details>
+        <details class="reveal">
+          <summary>需要联网吗？</summary>
+          <p>节假日与调休上班日的标记需要联网获取（每天最多请求一次，成功后离线缓存）；其余功能完全离线可用。</p>
+        </details>
+        <details class="reveal">
+          <summary>换手机怎么迁移？</summary>
+          <p>目前没有云端同步，换机后需要在新手机上重新设置人员与排班周期（一到两分钟即可配好）。</p>
+        </details>
+        <details class="reveal">
+          <summary>升级安装会丢数据吗？</summary>
+          <p>只要签名一致，覆盖安装会保留原有数据。如果系统提示「签名不一致」，说明之前装的是测试版本，需要先卸载旧版本再安装，此时本地数据会被清除。</p>
+        </details>
+        <details class="reveal">
+          <summary>支持哪些系统？</summary>
+          <p>Android 7.0（API 24）及以上，Android 12 及以上可获得完整的毛玻璃背景效果。</p>
+        </details>
+        <details class="reveal">
+          <summary>收费吗？可以商用吗？</summary>
+          <p>免费使用。该软件仅供个人使用，请勿商用。</p>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>该软件仅供个人使用，请勿商用。</div>
+    <div>Copyright © 2026 WYQ 版权所有。</div>
+    <div class="links">
+      <a href="https://github.com/yueqiwu/paibanzhushou" target="_blank" rel="noopener">GitHub 仓库</a>
+      <a href="https://github.com/yueqiwu/paibanzhushou/issues" target="_blank" rel="noopener">反馈问题</a>
+      <a href="#download">下载最新版</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var items = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) {
+      items.forEach(function (el) { el.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.06 });
+    items.forEach(function (el) { io.observe(el); });
+  })();
+</script>
+</body>
+</html>
