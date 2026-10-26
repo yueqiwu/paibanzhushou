@@ -1,19 +1,12 @@
 *.iml
 .gradle
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
+local.properties
+.idea/*
 /build
 /captures
 .externalNativeBuild
 .cxx
-local.properties
-.kotlin/
 
 # 签名文件不入库
 keystore/
@@ -21,4 +14,6 @@ keystore.properties
 
 # 开发期截图与临时文件
 shots/
-*.png
+
+# 部署中间产物
+build/deploy_stage/
