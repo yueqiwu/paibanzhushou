@@ -14,7 +14,7 @@
 | --- | --- |
 | 下载 APK | <https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.4/paibanzhushou-1.0.4.apk>（8,575,654 字节） |
 | 官网（GitHub Pages） | <https://yueqiwu.github.io/paibanzhushou/> |
-| 官网（自有域名） | `https://qipaclub.top/paibanzhushou/`（部署文件见 `docs/`，待服务器上传） |
+| 官网（自有域名） | <https://qipaclub.top/paibanzhushou/>（宝塔站点 `c:/wwwroot/qipaclub.top/paibanzhushou`，APK 也在该目录，官网直链下载） |
 | 源码 | <https://github.com/yueqiwu/paibanzhushou> |
 | 版本 / Release | v1.0.4（versionCode 104，正式签名） |
 | 包校验 | SHA-256 `58a4c15ec9ff654985d66383b40a4d0239854b474b2179a7ea040df8d0e59928` |
