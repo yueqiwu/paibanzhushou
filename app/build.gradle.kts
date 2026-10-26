@@ -24,9 +24,9 @@ android {
         applicationId = "com.bilu.paibanzhushou"
         minSdk = 24
         targetSdk = 37
-        // 与源项目 manifest.json 保持一致（versionName 1.0.3 / versionCode 102）
-        versionCode = 104
-        versionName = "1.0.4"
+        // 1.0.3/102 对齐源项目；1.0.4 日历不限年份；1.0.5 改名「班表小历」
+        versionCode = 105
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

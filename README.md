@@ -1,10 +1,12 @@
-# 排班助手（Android 原生版）
+# 班表小历（Android 原生版）
+
+> 应用商店上架名：**班表小历**（原名「排班助手」，因商店内已有同名应用被占用而改名；包名仍为 `com.bilu.paibanzhushou`，老用户可原地升级）。
 
 由 uniapp 项目 `D:\code\paiban_uniapp`（Vue3 + uvue/uni-app，版本 1.0.3 / 102）**1:1 移植**为 Android 原生 App，
 使用 Kotlin + Jetpack Compose 重写，UI 尺寸、配色、文案、交互与业务规则均对准源项目；**wgt 热更新相关代码已丢弃**。
 
 - 包名 / applicationId：`com.bilu.paibanzhushou`
-- 当前发布版本：**versionName 1.0.4，versionCode 104**（初始移植版本对齐源 manifest.json 的 1.0.3 / 102；1.0.4 起日历不再限制前后一年）
+- 当前发布版本：**versionName 1.0.5，versionCode 105**（初始移植版本对齐源 manifest.json 的 1.0.3 / 102；1.0.4 起日历不再限制前后一年）
 - minSdk 24（Android 7.0），targetSdk 37，Compose Material3
 - 无第三方运行时依赖：持久化用 SharedPreferences，网络用 HttpURLConnection，JSON 用 org.json
 
@@ -12,12 +14,12 @@
 
 | | |
 | --- | --- |
-| 下载 APK | <https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.4/paibanzhushou-1.0.4.apk>（8,575,654 字节） |
+| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.5.apk>（8,575,654 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.5/banbiaoxiaoli-1.0.5.apk> |
 | 官网（GitHub Pages） | <https://yueqiwu.github.io/paibanzhushou/> |
 | 官网（自有域名） | <https://qipaclub.top/paibanzhushou/>（宝塔站点 `c:/wwwroot/qipaclub.top/paibanzhushou`，APK 也在该目录，官网直链下载） |
 | 源码 | <https://github.com/yueqiwu/paibanzhushou> |
-| 版本 / Release | v1.0.4（versionCode 104，正式签名） |
-| 包校验 | SHA-256 `58a4c15ec9ff654985d66383b40a4d0239854b474b2179a7ea040df8d0e59928` |
+| 版本 / Release | v1.0.5（versionCode 105，正式签名） |
+| 包校验 | SHA-256 `aa158af138f5a4c0a2047ca937b9d4fea9a4482cd37de7f30806032b797c1538` |
 
 官网源码就是本仓库的 `docs/` 目录（纯静态 `index.html` + `style.css` + `img/`，全部相对路径），
 可直接整目录拷到任意静态站点的子路径下，例如 `qipaclub.top/paibanzhushou/`。

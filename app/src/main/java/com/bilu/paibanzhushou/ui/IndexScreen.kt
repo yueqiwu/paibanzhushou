@@ -223,7 +223,7 @@ private fun HeroCard(state: IndexState) {
         }
         Column(Modifier.padding(start = Rpx.dp(18))) {
             Text(
-                text = "排班助手",
+                text = "班表小历",
                 fontSize = Rpx.sp(34),
                 fontWeight = FontWeight.Bold,
                 color = C.textPrimary,
