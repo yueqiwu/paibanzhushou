@@ -4,9 +4,23 @@
 使用 Kotlin + Jetpack Compose 重写，UI 尺寸、配色、文案、交互与业务规则均对准源项目；**wgt 热更新相关代码已丢弃**。
 
 - 包名 / applicationId：`com.bilu.paibanzhushou`
-- versionName 1.0.3，versionCode 102（与源 manifest.json 一致）
-- minSdk 24，targetSdk 37，Compose Material3
+- 当前发布版本：**versionName 1.0.4，versionCode 104**（初始移植版本对齐源 manifest.json 的 1.0.3 / 102；1.0.4 起日历不再限制前后一年）
+- minSdk 24（Android 7.0），targetSdk 37，Compose Material3
 - 无第三方运行时依赖：持久化用 SharedPreferences，网络用 HttpURLConnection，JSON 用 org.json
+
+## 下载 / 官网
+
+| | |
+| --- | --- |
+| 下载 APK | <https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.4/paibanzhushou-1.0.4.apk>（8,575,654 字节） |
+| 官网（GitHub Pages） | <https://yueqiwu.github.io/paibanzhushou/> |
+| 官网（自有域名） | `https://qipaclub.top/paibanzhushou/`（部署文件见 `docs/`，待服务器上传） |
+| 源码 | <https://github.com/yueqiwu/paibanzhushou> |
+| 版本 / Release | v1.0.4（versionCode 104，正式签名） |
+| 包校验 | SHA-256 `58a4c15ec9ff654985d66383b40a4d0239854b474b2179a7ea040df8d0e59928` |
+
+官网源码就是本仓库的 `docs/` 目录（纯静态 `index.html` + `style.css` + `img/`，全部相对路径），
+可直接整目录拷到任意静态站点的子路径下，例如 `qipaclub.top/paibanzhushou/`。
 
 ## 目录结构
 
@@ -115,9 +129,28 @@ uniapp 版包名 `com.paibanzhushou.wyq`（release 包、不可调试、设备�
 
 ```powershell
 $env:JAVA_HOME='E:\androidStudio\jbr'
-.\gradlew.bat assembleDebug
-# 产物：app\build\outputs\apk\debug\app-debug.apk
+
+.\gradlew.bat assembleDebug     # 调试包：app\build\outputs\apk\debug\app-debug.apk
+.\gradlew.bat assembleRelease   # 正式包：app\build\outputs\apk\release\app-release.apk
+
+# 校验签名（v2 方案，证书 CN=WYQ）
+& '$env:JAVA_HOME\bin\apksigner.bat' verify --print-certs app\build\outputs\apk\release\app-release.apk
 ```
+
+### 正式包签名
+
+签名信息放在仓库外的两个文件里（均已加入 `.gitignore`，不进版本库）：
+
+- `keystore/paibanzhushou.jks`：PKCS12，alias `paibanzhushou`，口令 `Paiban@2026`，有效期 10950 天，SHA-256 证书指纹
+  `7E:38:0A:33:DF:C6:A0:CC:1D:A7:4E:F0:E3:4A:82:43:CB:5F:27:46:83:92:B9:FD:6E:40:36:AD:BE:8B:43:11`。
+- `keystore.properties`：`storeFile=keystore/paibanzhushou.jks` / `storePassword=...` / `keyAlias=paibanzhushou` / `keyPassword=...`，
+  由 `app/build.gradle.kts` 顶部的 `Properties` 读取后注入 `signingConfigs.release`。
+
+> **正式包关闭了 R8 优化**（`optimization { enable = false }`）。开启 AGP 的 `packageScope` 优化后，1.0.4 会在启动时崩在
+> `androidx.startup.InitializationProvider` → `ProcessLifecycleInitializer`，报
+> `java.lang.IllegalAccessError: Class kotlin.collections.f extended by class jg is inaccessible`。稳定优先，保持不混淆（包体 8.58 MB）。
+
+> 换手机测试正式包时注意：release 与旧 debug 签名不同，`adb install -r` 会静默失败（版本号不变），需先 `adb uninstall com.bilu.paibanzhushou`。
 
 ## 开发辅助
 
