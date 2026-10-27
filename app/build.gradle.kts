@@ -43,6 +43,13 @@ android {
     }
 
     buildTypes {
+        // debug 也用正式签名库：微信开放平台是按「包名 + 签名」校验调用方的，
+        // 用 debug.keystore 会被微信拒绝（应用包名签名信息校验不通过）。
+        debug {
+            if (keystorePropsFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             // 关闭 R8 优化：AGP 的 packageScope 优化会在 1.0.4 上触发
@@ -73,6 +80,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    // 微信开放 SDK：仅用于「App 拉起微信小程序」（WXLaunchMiniProgram）
+    implementation("com.tencent.mm.opensdk:wechat-sdk-android:6.8.40")
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
