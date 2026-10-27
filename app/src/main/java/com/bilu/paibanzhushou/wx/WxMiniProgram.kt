@@ -84,6 +84,8 @@ object WxMiniProgram {
 
         val appId = context.getString(R.string.wx_app_id).trim()
         val api = WXAPIFactory.createWXAPI(context.applicationContext, appId, true)
+        // 先注册一次，确保微信侧拿到本应用的 appId（部分机型/版本不注册会直接返回 has_no_permission）
+        api.registerApp(appId)
 
         val req = WXLaunchMiniProgram.Req().apply {
             this.userName = userName
@@ -137,8 +139,69 @@ object WxMiniProgram {
         }
     }
 
-    /** 优先用 scheme（兼容性最好），失败再退回 SDK。 */
+    /**
+     * 用「明文 URL Scheme」拉起小程序：不经过 SDK、不走开放平台、也不需要账号认证或关联。
+     *
+     * 格式（微信官方文档「获取 URL Scheme → 明文 URL Scheme」）：
+     * `weixin://dl/business/?appid={小程序AppID}&path={页面路径}&query={参数}&env_version=release`
+     *
+     * 前提（小程序后台一次性开关，代码替代不了）：
+     * 小程序后台 → 左下角账号 → 账号设置 → 基本设置 → 隐私与安全 → 「明文Scheme拉起此小程序」声明。
+     * 另外 path 必须是**已发布版本**里真实存在的页面，且 path 里不能带 query（参数放 query）。
+     *
+     * 微信客户端自己注册了 weixin:// 的 Activity，本 App 用 ACTION_VIEW 打开即可，
+     * 这条路不校验调用方签名，所以个人主体（未认证）账号也能用。
+     */
+    fun launchByPlainScheme(
+        context: Context,
+        appId: String = context.getString(R.string.wx_miniprogram_appid).trim(),
+        path: String = context.getString(R.string.wx_miniprogram_path).trim(),
+        query: String = "",
+        envVersion: String = "release",
+    ): Result {
+        if (!appId.startsWith("wx") || appId == "wx0000000000000000") {
+            Log.w(TAG, "wx_miniprogram_appid 尚未填写，跳过明文 scheme")
+            return Result.NotConfigured
+        }
+        if (!isWeChatInstalled(context)) return Result.WeChatNotInstalled
+
+        val pagePath = path.substringBefore('?').trim()
+        val queryFromPath = path.substringAfter('?', "").trim()
+        val mergedQuery = listOf(queryFromPath, query.trim())
+            .filter { it.isNotBlank() }
+            .joinToString("&")
+
+        // path 按原样拼接（官方示例里就是裸路径，做百分号编码反而可能对不上）；
+        // query 必须 url_encode，否则 & 会被当成参数分隔符。
+        val url = buildString {
+            append("weixin://dl/business/?appid=").append(appId)
+            if (pagePath.isNotBlank()) append("&path=").append(pagePath)
+            if (mergedQuery.isNotBlank()) append("&query=").append(Uri.encode(mergedQuery))
+            append("&env_version=").append(envVersion)
+        }
+        Log.i(TAG, "launchByPlainScheme: " + url)
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try {
+            context.startActivity(intent)
+            Result.Launched
+        } catch (e: ActivityNotFoundException) {
+            Log.e(TAG, "没有 Activity 能处理 " + url, e)
+            Result.WeChatNotInstalled
+        } catch (t: Throwable) {
+            Log.e(TAG, "明文 scheme 跳转失败", t)
+            Result.Rejected(t.message ?: "明文 scheme 跳转失败")
+        }
+    }
+
+    /** 优先用明文 scheme（不校验签名）→ 再试 jumpWxa scheme → 最后退回 SDK。 */
     fun launchBestEffort(context: Context, userName: String? = null, path: String? = null): Result {
+        val plain = launchByPlainScheme(
+            context,
+            path = path?.takeIf { it.isNotBlank() } ?: context.getString(R.string.wx_miniprogram_path).trim(),
+        )
+        if (plain is Result.Launched) return plain
         val scheme = launchByScheme(
             context,
             userName = userName?.takeIf { it.isNotBlank() } ?: context.getString(R.string.wx_miniprogram_id).trim(),
