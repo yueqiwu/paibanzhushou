@@ -2,4 +2,11 @@
 <resources>
 
     <style name="Theme.Paibanzhushou" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- 闹钟响铃全屏页：深色底、锁屏也能覆盖 -->
+    <style name="Theme.Paibanzhushou.Alarm" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowShowWallpaper">false</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
 </resources>

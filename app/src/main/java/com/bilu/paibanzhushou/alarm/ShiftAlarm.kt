@@ -27,6 +27,8 @@ object ShiftAlarm {
     const val ACTION_FIRE = "com.bilu.paibanzhushou.action.SHIFT_ALARM"
     const val EXTRA_DATE = "alarm_date"
     const val EXTRA_BAN = "alarm_ban"
+    const val EXTRA_FROM_ALARM_CLOCK = "alarm_from_clock"
+    private const val SNOOZE_RC = 8801
 
     private const val WRITTEN_KEY = "paiban_alarm_written_v1"
 
@@ -80,14 +82,6 @@ object ShiftAlarm {
             }
         }
 
-        val showIntent = PendingIntent.getActivity(
-            context, 0,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         // setAlarmClock 在缺「闹钟和提醒」权限时会抛 SecurityException，这里按实际成功数记账，
         // 免得出现「设置里显示已写入 N 个闹钟，系统里其实一个都没有」的假象。
         val written = ArrayList<String>(desired.size)
@@ -95,22 +89,58 @@ object ShiftAlarm {
         desired.forEach { (k, p) ->
             val (date, ban) = p
             val pi = pendingIntent(context, date, ban)
+            // 每条闹钟用各自的 showIntent（requestCode 不同），避免 ROM 把「同一条闹钟」合并
+            val showIntent = showIntent(context, date, ban)
             val ok = runCatching {
                 am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAt(date, config.hour, config.minute), showIntent), pi)
             }.isSuccess
             if (ok) written.add(k)
         }
         Store.writeRaw(WRITTEN_KEY, JSONArray(written).toString())
+        // 常驻前台服务：ColorOS 会把「后台闲置」应用的精确闹钟整体延后约 3 天，
+        // 前台服务让本应用不进入闲置状态，闹钟才能准点触发。
+        if (written.isNotEmpty()) AlarmKeepAliveService.start(context, written.size)
+        else AlarmKeepAliveService.stop(context)
         return written.size
     }
 
-    /** 关掉开关：撤销本应用写过的全部闹钟 */
+    /** 关掉开关：撤销本应用写过的全部闹钟（含「稍后提醒」用的临时闹钟） */
     fun cancelAll(context: Context) {
         writtenKeys(context).forEach { k ->
             val parts = k.split("#")
             if (parts.size == 2) cancelOne(context, parts[0], parts[1])
         }
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        if (am != null) runCatching { am.cancel(snoozeIntent(context, "", "")) }
         Store.writeRaw(WRITTEN_KEY, "[]")
+        AlarmKeepAliveService.stop(context)
+    }
+
+    /**
+     * 「稍后提醒」：把这条班次再排 [minutes] 分钟后的一个闹钟。
+     * 固定 requestCode，所以同一个班次重复点稍后只会覆盖上一条。
+     */
+    fun scheduleSnooze(context: Context, date: String, ban: String, minutes: Int = 5) {
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val trigger = System.currentTimeMillis() + minutes.coerceIn(1, 60) * 60_000L
+        val showIntent = showIntent(context, date, ban)
+        val pi = snoozeIntent(context, date, ban)
+        runCatching {
+            am.setAlarmClock(AlarmManager.AlarmClockInfo(trigger, showIntent), pi)
+        }.onFailure { android.util.Log.w("AlarmRing", "snooze failed", it) }
+    }
+
+    private fun snoozeIntent(context: Context, date: String, ban: String): PendingIntent {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ACTION_FIRE + "/snooze"
+            putExtra(EXTRA_DATE, date)
+            putExtra(EXTRA_BAN, ban)
+            putExtra(EXTRA_FROM_ALARM_CLOCK, true)
+        }
+        return PendingIntent.getBroadcast(
+            context, SNOOZE_RC, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     /** 闹钟响过之后，把它从「已写」清单里去掉（下次同步会补新日期的） */
@@ -125,11 +155,28 @@ object ShiftAlarm {
 
     private fun requestCode(date: String, ban: String) = (date + "#" + ban).hashCode()
 
+    /**
+     * 每条闹钟用自己的 action（tag）：ColorOS 的 OplusAlarmAdjustment 会按 tag 把「同一个应用
+     * 的一批闹钟」当成一组做延后（实测把最近的闹钟推后了约 3 天），逐条区分后不再被合并。
+     */
+    private fun actionFor(date: String, ban: String) = ACTION_FIRE + "/" + date + "#" + ban
+
+    private fun showIntent(context: Context, date: String, ban: String): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        return PendingIntent.getActivity(
+            context, requestCode(date, ban), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
     private fun pendingIntent(context: Context, date: String, ban: String): PendingIntent {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
-            action = ACTION_FIRE
+            action = actionFor(date, ban)
             putExtra(EXTRA_DATE, date)
             putExtra(EXTRA_BAN, ban)
+            putExtra(EXTRA_FROM_ALARM_CLOCK, true)
         }
         return PendingIntent.getBroadcast(
             context, requestCode(date, ban), intent,

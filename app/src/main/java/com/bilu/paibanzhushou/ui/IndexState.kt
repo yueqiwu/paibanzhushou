@@ -702,6 +702,8 @@ class IndexState(
             config = config.copy(bans = listOf("值班").filter { banOptions.contains(it) })
         }
         alarmConfig = config
+        // 开关是关的，但系统里还残留着上次写的闹钟（比如中途重装 / 清了数据）→ 清掉
+        if (!config.enabled) ShiftAlarm.cancelAll(context)
     }
 
     fun toggleAlarmBan(ban: String) {
@@ -737,6 +739,11 @@ class IndexState(
             requestExactAlarmPermission()
             return
         }
+        // Android 14+：没有「全屏通知」权限时，闹钟到点只能弹通知、不会亮屏响铃
+        if (!com.bilu.paibanzhushou.alarm.AlarmNotifications.canUseFullScreen(context)) {
+            toast("请允许「全屏通知」，否则闹钟可能只弹通知")
+            requestFullScreenPermission()
+        }
         val count = resyncAlarms()
         toast(
             when {
@@ -751,6 +758,18 @@ class IndexState(
     private fun requestExactAlarmPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         val direct = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + context.packageName))
+        val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
+        runCatching { context.startActivity(direct.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { runCatching { context.startActivity(fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+    }
+
+    /** 跳系统「全屏通知」开关页（Android 14+ 才有） */
+    private fun requestFullScreenPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return
+        val direct = Intent(
+            Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+            Uri.parse("package:" + context.packageName)
+        )
         val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
         runCatching { context.startActivity(direct.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { runCatching { context.startActivity(fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
