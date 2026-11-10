@@ -106,6 +106,7 @@ import kotlin.math.roundToInt
 fun IndexScreen(state: IndexState, onOpenMemberTable: () -> Unit) {
     val scrollState = rememberScrollState()
     var confettiOrigin by remember { mutableStateOf(Offset.Zero) }
+    var showAlarmTime by remember { mutableStateOf(false) }
     val dragging = state.dragController.dragging
 
     Box(Modifier.fillMaxSize().background(C.pageBg)) {
@@ -121,7 +122,11 @@ fun IndexScreen(state: IndexState, onOpenMemberTable: () -> Unit) {
             Spacer(Modifier.height(Rpx.dp(100)))
 
             HeroCard(state)
-            ConfigCard(state, onConfettiOrigin = { confettiOrigin = it })
+            ConfigCard(
+                state,
+                onConfettiOrigin = { confettiOrigin = it },
+                onPickAlarmTime = { showAlarmTime = true }
+            )
             CalendarSection(state = state, onOpenMemberTable = onOpenMemberTable)
             CopyrightFooter()
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
@@ -130,6 +135,16 @@ fun IndexScreen(state: IndexState, onOpenMemberTable: () -> Unit) {
         DragOverlay(state)
         ConfettiOverlay(confettiOrigin, state.confettiPieces, state.confettiKey, state.confettiVisible)
         BanPickerSheet(state)
+        AlarmTimePickerSheet(
+            show = showAlarmTime,
+            hour = state.alarmConfig.hour,
+            minute = state.alarmConfig.minute,
+            onDismiss = { showAlarmTime = false },
+            onPick = { h, m ->
+                showAlarmTime = false
+                state.setAlarmTime(h, m)
+            }
+        )
         state.confirm?.let { c ->
             ConfirmDialog(c) { state.confirm = null }
         }
@@ -252,7 +267,11 @@ private fun HeroCard(state: IndexState) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ConfigCard(state: IndexState, onConfettiOrigin: (Offset) -> Unit) {
+private fun ConfigCard(
+    state: IndexState,
+    onConfettiOrigin: (Offset) -> Unit,
+    onPickAlarmTime: () -> Unit
+) {
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -309,7 +328,7 @@ private fun ConfigCard(state: IndexState, onConfettiOrigin: (Offset) -> Unit) {
             exit = shrinkVertically(tween(280)) + fadeOut(tween(200))
         ) {
             Column(Modifier.fillMaxWidth()) {
-                ConfigBody(state, onConfettiOrigin)
+                ConfigBody(state, onConfettiOrigin, onPickAlarmTime)
             }
         }
     }
@@ -404,7 +423,11 @@ private fun PeopleTabs(state: IndexState) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ConfigBody(state: IndexState, onConfettiOrigin: (Offset) -> Unit) {
+private fun ConfigBody(
+    state: IndexState,
+    onConfettiOrigin: (Offset) -> Unit,
+    onPickAlarmTime: () -> Unit
+) {
     val nameFocus = remember { FocusRequester() }
     var showAnchorPicker by remember { mutableStateOf(false) }
 
@@ -545,7 +568,7 @@ private fun ConfigBody(state: IndexState, onConfettiOrigin: (Offset) -> Unit) {
             )
         }
 
-        AlarmSection(state)
+        AlarmSection(state, onPickAlarmTime)
 
         // 保存并生成
         Row(
@@ -728,8 +751,7 @@ private fun RestSettingRow(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AlarmSection(state: IndexState) {
-    var showTimePicker by remember { mutableStateOf(false) }
+private fun AlarmSection(state: IndexState, onPickAlarmTime: () -> Unit) {
     val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -788,7 +810,7 @@ private fun AlarmSection(state: IndexState) {
                 Modifier
                     .background(C.fieldBg, RoundedCornerShape(Rpx.dp(16)))
                     .border(Rpx.dp(1), Color(0x0A000000), RoundedCornerShape(Rpx.dp(16)))
-                    .clickable { showTimePicker = true }
+                    .clickable { onPickAlarmTime() }
                     .padding(horizontal = Rpx.dp(20))
                     .height(Rpx.dp(64)),
                 contentAlignment = Alignment.Center
@@ -844,16 +866,6 @@ private fun AlarmSection(state: IndexState) {
         modifier = Modifier.padding(top = Rpx.dp(10))
     )
 
-    TimePickerLauncher(
-        show = showTimePicker,
-        hour = state.alarmConfig.hour,
-        minute = state.alarmConfig.minute,
-        onDismiss = { showTimePicker = false },
-        onPick = { h, m ->
-            showTimePicker = false
-            state.setAlarmTime(h, m)
-        }
-    )
 }
 
 /* ---------------- 版权 ---------------- */

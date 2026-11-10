@@ -25,9 +25,10 @@ android {
         minSdk = 24
         targetSdk = 37
         // 1.0.3/102 对齐源项目；1.0.4 日历不限年份；1.0.5 改名「班表小历」；
-        // 1.0.6 修节假日数据源：某年接口返回空对象时不再吞掉备源（2027 年假/班标记）
-        versionCode = 106
-        versionName = "1.0.6"
+        // 1.0.6 修节假日数据源：某年接口返回空对象时不再吞掉备源（2027 年假/班标记）；
+        // 1.0.7 修班次闹钟的响铃时间选择：Dialog 里的滚轮一拖就被判成点到外面而关掉，改为应用内浮层
+        versionCode = 107
+        versionName = "1.0.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

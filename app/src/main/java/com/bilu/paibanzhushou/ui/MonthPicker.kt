@@ -1,5 +1,12 @@
 package com.bilu.paibanzhushou.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
@@ -18,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -231,35 +239,32 @@ private fun WheelPickerDialog(
     }
 }
 
-/** 只选时刻（小时 + 分钟），用于班次闹铃时间 */
+/** 只选时刻（小时 + 分钟），用于班次闹铃时间。
+ *  用应用内浮层而不是 Dialog：部分机型上 Dialog 里的滚轮一拖动就会被判成
+ *  「点到外面」而直接关掉，导致时间根本没法改。 */
 @Composable
-fun TimePickerLauncher(
+fun AlarmTimePickerSheet(
     show: Boolean,
     hour: Int,
     minute: Int,
     onDismiss: () -> Unit,
     onPick: (Int, Int) -> Unit
 ) {
-    if (!show) return
-    var h by remember { mutableIntStateOf(hour.coerceIn(0, 23)) }
-    var m by remember { mutableIntStateOf(minute.coerceIn(0, 59)) }
-    val hours = remember { (0..23).toList() }
-    val minutes = remember { (0..59).toList() }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false,
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+    AnimatedVisibility(
+        visible = show,
+        enter = fadeIn(tween(180)) + slideInVertically(tween(220, easing = FastOutSlowInEasing)) { it / 6 },
+        exit = fadeOut(tween(160)) + slideOutVertically(tween(200)) { it / 6 }
     ) {
+        var h by remember { mutableIntStateOf(hour.coerceIn(0, 23)) }
+        var m by remember { mutableIntStateOf(minute.coerceIn(0, 59)) }
+        val hours = remember { (0..23).toList() }
+        val minutes = remember { (0..59).toList() }
+
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color(0x66000000))
+                    .background(Color(0x59112034))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -269,7 +274,10 @@ fun TimePickerLauncher(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(Color.White)
+                    .background(
+                        Color.White,
+                        RoundedCornerShape(topStart = Rpx.dp(28), topEnd = Rpx.dp(28))
+                    )
                     .navigationBarsPadding()
             ) {
                 Row(
