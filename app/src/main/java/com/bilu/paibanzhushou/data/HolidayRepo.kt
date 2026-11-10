@@ -21,6 +21,13 @@ import java.net.URL
 object HolidayRepo {
     const val CACHE_KEY = "paiban_holiday_ban_v1"
 
+    /**
+     * 缓存结构版本。
+     * 2 = 修掉了「某年接口返回空对象却当作成功、导致备源从不生效」的 bug；
+     * 老缓存里没有 ver 字段，升级后视为过期并立刻重拉一次，不用等第二天。
+     */
+    private const val CACHE_VER = 2
+
     private const val TIMOR_YEAR = "https://timor.tech/api/holiday/year/"
     private val HOLIDAY_CN_YEAR = listOf(
         "https://fastly.jsdelivr.net/gh/NateScarlet/holiday-cn@master/",
@@ -42,16 +49,19 @@ object HolidayRepo {
         val raw = Store.readStringOrNull(CACHE_KEY) ?: return Cache(emptyList(), emptyList(), 0L)
         return runCatching {
             val o = JSONObject(raw)
+            // 旧结构：数据先照用，但把 fetchedAt 归零，交给上层立刻重拉
+            val fresh = o.optInt("ver", 1) >= CACHE_VER
             Cache(
                 holiday = o.optJSONArray("holiday").toListSafe(),
                 banList = (o.optJSONArray("banList") ?: o.optJSONArray("banlist")).toListSafe(),
-                fetchedAt = o.optLong("fetchedAt", 0L)
+                fetchedAt = if (fresh) o.optLong("fetchedAt", 0L) else 0L
             )
         }.getOrElse { Cache(emptyList(), emptyList(), 0L) }
     }
 
     fun saveCache(cache: Cache) {
         val o = JSONObject()
+        o.put("ver", CACHE_VER)
         o.put("holiday", JSONArray(cache.holiday))
         o.put("banList", JSONArray(cache.banList))
         o.put("savedAt", System.currentTimeMillis())
@@ -59,22 +69,45 @@ object HolidayRepo {
         Store.writeRaw(CACHE_KEY, o.toString())
     }
 
-    /** 拉取「今天 ±1 年」的节假日与调班；全部失败时返回 null（保留旧缓存） */
+    /**
+     * 拉取「今天 ±1 年」的节假日与调班；全部失败时返回 null（保留旧缓存）。
+     *
+     * 注意：某一年「拉到了但内容为空」和「没拉到」必须区别对待。
+     * timor.tech 对还没公布安排的年份会返回 {"code":0,"holiday":{}}，
+     * 这种空结果不能当作成功，否则会导致备源 holiday-cn 永远不被尝试
+     * （2027 年就踩过这个坑：接口已更新，App 却仍显示不出「假/班」）。
+     */
     fun fetchRemote(): Cache? {
         val year = Dates.year(Dates.todayStart())
+        val years = listOf(year - 1, year, year + 1)
+        val fetched = LinkedHashMap<Int, Pair<List<String>, List<String>>>()
+        for (y in years) {
+            val days = fetchTimor(y) ?: fetchHolidayCn(y)
+            if (days == null || (days.first.isEmpty() && days.second.isEmpty())) continue
+            fetched[y] = days
+        }
+        if (fetched.isEmpty()) return null
+
         val holiday = LinkedHashSet<String>()
         val banList = LinkedHashSet<String>()
-        var anySuccess = false
-        for (y in listOf(year - 1, year, year + 1)) {
-            val days = fetchTimor(y) ?: fetchHolidayCn(y)
-            if (days == null) continue
-            anySuccess = true
-            days.first.forEach { holiday.add(it) }
-            days.second.forEach { banList.add(it) }
+
+        // 没拉到的年份先沿用旧缓存，避免某一年接口挂了就把那一年的数据清空
+        val missing = years.toSet() - fetched.keys
+        if (missing.isNotEmpty()) {
+            val old = loadCache()
+            old.holiday.filterTo(holiday) { yearOf(it) in missing }
+            old.banList.filterTo(banList) { yearOf(it) in missing }
         }
-        if (!anySuccess || (holiday.isEmpty() && banList.isEmpty())) return null
+        fetched.values.forEach { (h, b) ->
+            holiday.addAll(h)
+            banList.addAll(b)
+        }
+
+        if (holiday.isEmpty() && banList.isEmpty()) return null
         return Cache(holiday.sorted(), banList.sorted(), Dates.todayStart())
     }
+
+    private fun yearOf(dateStr: String): Int? = dateStr.take(4).toIntOrNull()
 
     private fun httpGet(url: String): String? {
         var conn: HttpURLConnection? = null
@@ -101,8 +134,8 @@ object HolidayRepo {
     /** 主源：timor.tech 按年查询 */
     private fun fetchTimor(year: Int): Pair<List<String>, List<String>>? {
         val text = httpGet(TIMOR_YEAR + year) ?: return null
-        return runCatching {
-            val map = JSONObject(text).optJSONObject("holiday") ?: return null
+        val result: Pair<List<String>, List<String>>? = runCatching {
+            val map = JSONObject(text).optJSONObject("holiday") ?: return@runCatching null
             val holiday = ArrayList<String>()
             val banList = ArrayList<String>()
             val keys = map.keys()
@@ -112,8 +145,10 @@ object HolidayRepo {
                 val date = item.optString("date").ifEmpty { year.toString() + "-" + key }
                 if (item.optBoolean("holiday", false)) holiday.add(date) else banList.add(date)
             }
-            holiday to banList
+            // 空对象（该年份安排还没公布）= 失败，交给备源，不能当成功返回空列表
+            if (holiday.isEmpty() && banList.isEmpty()) null else holiday to banList
         }.getOrNull()
+        return result
     }
 
     /** 备源：holiday-cn 静态 JSON（含 jsDelivr 的两个镜像域名） */

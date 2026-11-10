@@ -231,6 +231,120 @@ private fun WheelPickerDialog(
     }
 }
 
+/** 只选时刻（小时 + 分钟），用于班次闹铃时间 */
+@Composable
+fun TimePickerLauncher(
+    show: Boolean,
+    hour: Int,
+    minute: Int,
+    onDismiss: () -> Unit,
+    onPick: (Int, Int) -> Unit
+) {
+    if (!show) return
+    var h by remember { mutableIntStateOf(hour.coerceIn(0, 23)) }
+    var m by remember { mutableIntStateOf(minute.coerceIn(0, 59)) }
+    val hours = remember { (0..23).toList() }
+    val minutes = remember { (0..59).toList() }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0x66000000))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onDismiss() }
+            )
+            Column(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.White)
+                    .navigationBarsPadding()
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().height(Rpx.dp(88)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier.weight(1f).fillMaxSize().clickable { onDismiss() },
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(
+                            "取消",
+                            fontSize = Rpx.sp(30),
+                            color = Color(0xFF333333),
+                            modifier = Modifier.padding(start = Rpx.dp(30))
+                        )
+                    }
+                    Box(
+                        Modifier.weight(1f).fillMaxSize().clickable { onPick(h, m) },
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Text(
+                            "确定",
+                            fontSize = Rpx.sp(30),
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF007AFF),
+                            modifier = Modifier.padding(end = Rpx.dp(30))
+                        )
+                    }
+                }
+                Box(Modifier.fillMaxWidth().height(Rpx.dp(1)).background(Color(0xFFEBEBEB)))
+                Box(Modifier.fillMaxWidth().height(WHEEL_ITEM_H * 5)) {
+                    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center) {
+                        WheelColumn(
+                            values = hours.map { String.format(java.util.Locale.US, "%02d", it) + "时" },
+                            selectedIndex = h,
+                            onSelected = { h = hours[it] },
+                            modifier = Modifier.weight(1f)
+                        )
+                        WheelColumn(
+                            values = minutes.map { String.format(java.util.Locale.US, "%02d", it) + "分" },
+                            selectedIndex = m,
+                            onSelected = { m = minutes[it] },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth()
+                            .height(WHEEL_ITEM_H)
+                            .background(Color(0x0A000000))
+                    )
+                    Box(
+                        Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth()
+                            .height(Rpx.dp(1))
+                            .offset(y = 0.dp - WHEEL_ITEM_H / 2)
+                            .background(Color(0xFFE9E9E9))
+                    )
+                    Box(
+                        Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth()
+                            .height(Rpx.dp(1))
+                            .offset(y = WHEEL_ITEM_H / 2)
+                            .background(Color(0xFFE9E9E9))
+                    )
+                }
+            }
+        }
+    }
+}
+
 /**
  * 单列滚轮：等行高 + 吸附滚动，停稳后回调当前居中项。
  * 用 LazyColumn 的 contentPadding 把首项推到中间来实现「居中选中」。

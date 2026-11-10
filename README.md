@@ -6,7 +6,7 @@
 使用 Kotlin + Jetpack Compose 重写，UI 尺寸、配色、文案、交互与业务规则均对准源项目；**wgt 热更新相关代码已丢弃**。
 
 - 包名 / applicationId：`com.bilu.paibanzhushou`
-- 当前发布版本：**versionName 1.0.5，versionCode 105**（初始移植版本对齐源 manifest.json 的 1.0.3 / 102；1.0.4 起日历不再限制前后一年）
+- 当前发布版本：**versionName 1.0.6，versionCode 106**（初始移植版本对齐源 manifest.json 的 1.0.3 / 102；1.0.4 起日历不再限制前后一年；1.0.6 修节假日数据源 + 新增班次闹钟）
 - minSdk 24（Android 7.0），targetSdk 37，Compose Material3
 - 无第三方运行时依赖：持久化用 SharedPreferences，网络用 HttpURLConnection，JSON 用 org.json
 
@@ -14,12 +14,12 @@
 
 | | |
 | --- | --- |
-| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.5.apk>（8,575,654 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.5/banbiaoxiaoli-1.0.5.apk> |
+| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.6.apk>（8,660,038 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.6/banbiaoxiaoli-1.0.6.apk> |
 | 官网（GitHub Pages） | <https://yueqiwu.github.io/paibanzhushou/> |
 | 官网（自有域名） | <https://qipaclub.top/paibanzhushou/>（宝塔站点 `c:/wwwroot/qipaclub.top/paibanzhushou`，APK 也在该目录，官网直链下载） |
 | 源码 | <https://github.com/yueqiwu/paibanzhushou> |
-| 版本 / Release | v1.0.5（versionCode 105，正式签名） |
-| 包校验 | SHA-256 `aa158af138f5a4c0a2047ca937b9d4fea9a4482cd37de7f30806032b797c1538` |
+| 版本 / Release | v1.0.6（versionCode 106，正式签名） |
+| 包校验 | SHA-256 `0C614AEC26C5EBECDD0300ADEF82D1A2EEAF314B30AE3E881F67E2CBC47A3A79` |
 
 官网源码就是本仓库的 `docs/` 目录（纯静态 `index.html` + `style.css` + `img/`，全部相对路径），
 可直接整目录拷到任意静态站点的子路径下，例如 `qipaclub.top/paibanzhushou/`。
@@ -105,7 +105,8 @@ app/src/main/java/com/bilu/paibanzhushou/
 | 保存并生成（彩花动效） | index.vue | IndexState.triggerConfetti + ConfettiOverlay |
 | 月历（农历、左右滑动翻页、翻月、选月、折叠、今天、单日覆盖） | wu-calendar + ban-picker | CalendarSection + BanPickerSheet |
 | 同事排班对比（月份切换/选择月份、横向滚动、吸顶、今日高亮并自动滚动） | member_table.vue | MemberTableScreen（表头与每行共享同一个 `ScrollState` + `horizontalScroll`，人员多于一屏可左滑，姓名不截断） |
-| 节假日数据（每日拉取一次并缓存） | loadHolidayAndBanList | HolidayRepo |
+| 节假日数据（每日拉取一次并缓存） | loadHolidayAndBanList | HolidayRepo（1.0.6 起主源返回空数据会继续回落到 holiday-cn，且缓存带 `ver`，旧缓存自动重拉） |
+| 班次闹钟（按日期写系统精确闹钟、到点通知响铃、重启与改排班自动重写） | 无（新增需求） | `alarm/ShiftAlarm` + `AlarmReceiver` + `BootReceiver` + `AlarmNotifications` + `data/AlarmSettings` |
 | 跨天刷新、进后台补写盘 | onShow / onHide | AppRoot 生命周期回调 |
 
 ## 有意省略（按需求）

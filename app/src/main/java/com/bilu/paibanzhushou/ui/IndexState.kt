@@ -1,5 +1,10 @@
 package com.bilu.paibanzhushou.ui
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -9,6 +14,9 @@ import com.bilu.paibanzhushou.core.BanColors
 import com.bilu.paibanzhushou.core.Dates
 import com.bilu.paibanzhushou.core.Schedule
 import com.bilu.paibanzhushou.core.SelectedEntry
+import com.bilu.paibanzhushou.alarm.ShiftAlarm
+import com.bilu.paibanzhushou.data.AlarmConfig
+import com.bilu.paibanzhushou.data.AlarmStore
 import com.bilu.paibanzhushou.data.HolidayRepo
 import com.bilu.paibanzhushou.data.PeopleStore
 import com.bilu.paibanzhushou.data.Person
@@ -56,6 +64,7 @@ data class ConfettiPiece(
  * 首页状态与业务逻辑，1:1 移植自 pages/index/index.vue。
  */
 class IndexState(
+    private val context: Context,
     private val scope: CoroutineScope,
     private val toast: (String) -> Unit
 ) {
@@ -79,6 +88,14 @@ class IndexState(
         private set
     var activePersonName by mutableStateOf("")
     var configOpen by mutableStateOf(false)
+        private set
+
+    // ---------- 闹钟 ----------
+    var alarmConfig by mutableStateOf(AlarmConfig())
+        private set
+
+    /** 最近一次同步到系统里的闹钟数量（给设置页文案用） */
+    var alarmCount by mutableIntStateOf(0)
         private set
 
     var anchorDate by mutableStateOf(Dates.formatYmd(Dates.todayStart()))
@@ -176,6 +193,7 @@ class IndexState(
     // ---------- 初始化 ----------
     fun init() {
         loadBanOptions()
+        loadAlarmConfig()
         loadPeople()
         loadHolidayAndBanList()
         todayStr = Dates.formatYmd(Dates.todayStart())
@@ -373,6 +391,8 @@ class IndexState(
         scheduleVersion++
         windowCache.clear()
         refreshTodayShift()
+        // 排班一变，闹钟对应的工作日也变了，跟着重写（开关没开就什么都不做）
+        if (alarmConfig.enabled) resyncAlarms()
         // 单日覆盖不再按一年裁剪：设到几年后也要保留
     }
 
@@ -665,9 +685,82 @@ class IndexState(
         overrides = overrides.filterValues { it != ban }
         weekendRestBans = weekendRestBans.filter { it != ban }
         holidayRestBans = holidayRestBans.filter { it != ban }
+        if (alarmConfig.bans.contains(ban)) {
+            alarmConfig = alarmConfig.copy(bans = alarmConfig.bans.filter { it != ban })
+            AlarmStore.save(alarmConfig)
+        }
 
         generateSchedule()
         toast("已删除该班次")
+    }
+
+    // ---------- 闹钟 ----------
+    fun loadAlarmConfig() {
+        var config = AlarmStore.load()
+        if (config.bans.isEmpty()) {
+            // 默认只给「值班」设闹钟（班次里没有值班就留空）
+            config = config.copy(bans = listOf("值班").filter { banOptions.contains(it) })
+        }
+        alarmConfig = config
+    }
+
+    fun toggleAlarmBan(ban: String) {
+        if (ban.isEmpty() || ban == Schedule.REST_BAN) return
+        val next = if (alarmConfig.bans.contains(ban)) {
+            alarmConfig.bans - ban
+        } else {
+            alarmConfig.bans + ban
+        }
+        alarmConfig = alarmConfig.copy(bans = next)
+        AlarmStore.save(alarmConfig)
+        if (alarmConfig.enabled) resyncAlarms()
+    }
+
+    fun setAlarmTime(hour: Int, minute: Int) {
+        alarmConfig = alarmConfig.copy(hour = hour.coerceIn(0, 23), minute = minute.coerceIn(0, 59))
+        AlarmStore.save(alarmConfig)
+        if (alarmConfig.enabled) resyncAlarms()
+    }
+
+    fun setAlarmEnabled(enabled: Boolean) {
+        alarmConfig = alarmConfig.copy(enabled = enabled)
+        AlarmStore.save(alarmConfig)
+        if (!enabled) {
+            ShiftAlarm.cancelAll(context)
+            alarmCount = 0
+            toast("已关闭班次闹钟")
+            return
+        }
+        if (!ShiftAlarm.canScheduleExact(context)) {
+            alarmCount = 0
+            toast("请在系统设置里允许「闹钟和提醒」")
+            requestExactAlarmPermission()
+            return
+        }
+        val count = resyncAlarms()
+        toast(
+            when {
+                count > 0 -> "已写入 " + count + " 个闹钟"
+                alarmConfig.bans.isEmpty() -> "先选一个要提醒的班次"
+                else -> "未来 " + alarmConfig.horizonDays + " 天里没有这些班次"
+            }
+        )
+    }
+
+    /** 跳系统「闹钟和提醒」授权页；没有这个页面就退到应用设置 */
+    private fun requestExactAlarmPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val direct = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + context.packageName))
+        val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
+        runCatching { context.startActivity(direct.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { runCatching { context.startActivity(fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+    }
+
+    /** 按当前人员和设置重写系统闹钟；返回写入数量 */
+    fun resyncAlarms(): Int {
+        val count = ShiftAlarm.sync(context, getActivePerson(), alarmConfig)
+        alarmCount = count
+        return count
     }
 
     fun banColor(ban: String): String = BanColors.get(ban)

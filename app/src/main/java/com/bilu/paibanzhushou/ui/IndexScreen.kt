@@ -45,6 +45,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -74,6 +78,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -86,8 +91,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.focus.FocusRequester
+import androidx.core.content.ContextCompat
 import com.bilu.paibanzhushou.R
 import com.bilu.paibanzhushou.core.Dates
+import com.bilu.paibanzhushou.core.Schedule
+import android.Manifest
 import kotlin.math.roundToInt
 
 /**
@@ -537,6 +545,8 @@ private fun ConfigBody(state: IndexState, onConfettiOrigin: (Offset) -> Unit) {
             )
         }
 
+        AlarmSection(state)
+
         // 保存并生成
         Row(
             Modifier.fillMaxWidth().padding(top = Rpx.dp(26)),
@@ -709,6 +719,141 @@ private fun RestSettingRow(
             }
         }
     }
+}
+
+/**
+ * 闹钟提醒：选班次 + 选时间 + 开关。
+ * 打开后按「未来 60 天里命中这些班次的日子」写系统闹钟（AlarmClockInfo），
+ * 排班一改就自动重写，重启后由 BootReceiver 恢复。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AlarmSection(state: IndexState) {
+    var showTimePicker by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        state.setAlarmEnabled(true)
+        if (!granted) state.toastMsg("没给通知权限，闹钟到点可能弹不出来")
+    }
+
+    val choices = state.banOptions.filter { it != Schedule.REST_BAN }
+    if (choices.isEmpty()) return
+
+    SectionLabel("闹钟提醒", topMargin = Rpx.dp(28))
+
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(top = Rpx.dp(14)),
+        horizontalArrangement = Arrangement.spacedBy(Rpx.dp(12)),
+        verticalArrangement = Arrangement.spacedBy(Rpx.dp(12))
+    ) {
+        choices.forEach { ban ->
+            val active = state.alarmConfig.bans.contains(ban)
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(if (active) Color(0x1A4A90E2) else C.fieldBg)
+                    .border(
+                        Rpx.dp(1),
+                        if (active) Color(0x664A90E2) else Color(0x0D000000),
+                        RoundedCornerShape(999.dp)
+                    )
+                    .clickable { state.toggleAlarmBan(ban) }
+                    .padding(horizontal = Rpx.dp(18), vertical = Rpx.dp(8)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(Rpx.dp(16))
+                        .background(hexColor(state.banColor(ban)), CircleShape)
+                )
+                Text(
+                    text = ban,
+                    fontSize = Rpx.sp(24),
+                    color = if (active) Color(0xFF2B6CB0) else Color(0xFF333333),
+                    modifier = Modifier.padding(start = Rpx.dp(8))
+                )
+            }
+        }
+    }
+
+    Row(
+        Modifier.fillMaxWidth().padding(top = Rpx.dp(18)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("响铃时间", fontSize = Rpx.sp(26), color = C.textLabel)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            Box(
+                Modifier
+                    .background(C.fieldBg, RoundedCornerShape(Rpx.dp(16)))
+                    .border(Rpx.dp(1), Color(0x0A000000), RoundedCornerShape(Rpx.dp(16)))
+                    .clickable { showTimePicker = true }
+                    .padding(horizontal = Rpx.dp(20))
+                    .height(Rpx.dp(64)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    state.alarmConfig.timeText,
+                    fontSize = Rpx.sp(26),
+                    color = Color(0xFF111111)
+                )
+            }
+        }
+    }
+
+    Row(
+        Modifier.fillMaxWidth().padding(top = Rpx.dp(10)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("自动写入系统闹钟", fontSize = Rpx.sp(26), color = C.textLabel)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            Switch(
+                checked = state.alarmConfig.enabled,
+                onCheckedChange = { checked ->
+                    if (!checked) {
+                        state.setAlarmEnabled(false)
+                    } else if (
+                        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.POST_NOTIFICATIONS
+                        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        state.setAlarmEnabled(true)
+                    }
+                },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = C.blue
+                )
+            )
+        }
+    }
+
+    Text(
+        text = if (state.alarmConfig.enabled) {
+            "已写入 " + state.alarmCount + " 个闹钟（未来 " + state.alarmConfig.horizonDays + " 天）；改排班会自动重写"
+        } else {
+            "开启后把未来 " + state.alarmConfig.horizonDays + " 天里这些班次的日子写成系统闹钟"
+        },
+        fontSize = Rpx.sp(22),
+        color = C.hint,
+        lineHeight = Rpx.sp(34),
+        modifier = Modifier.padding(top = Rpx.dp(10))
+    )
+
+    TimePickerLauncher(
+        show = showTimePicker,
+        hour = state.alarmConfig.hour,
+        minute = state.alarmConfig.minute,
+        onDismiss = { showTimePicker = false },
+        onPick = { h, m ->
+            showTimePicker = false
+            state.setAlarmTime(h, m)
+        }
+    )
 }
 
 /* ---------------- 版权 ---------------- */

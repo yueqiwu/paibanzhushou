@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
@@ -60,9 +61,10 @@ fun AppRoot() {
     Rpx.scale = configuration.screenWidthDp / 750f
 
     val density = LocalDensity.current
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val toastHost = remember { ToastHost() }
-    val indexState = remember { IndexState(scope, toastHost::show) }
+    val indexState = remember { IndexState(context.applicationContext, scope, toastHost::show) }
     var route by remember { mutableStateOf("index") }
 
     LaunchedEffect(Unit) { indexState.init() }
