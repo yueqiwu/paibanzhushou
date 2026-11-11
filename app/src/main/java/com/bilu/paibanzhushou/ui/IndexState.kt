@@ -21,7 +21,10 @@ import com.bilu.paibanzhushou.data.AlarmStore
 import com.bilu.paibanzhushou.data.HolidayRepo
 import com.bilu.paibanzhushou.data.PeopleStore
 import com.bilu.paibanzhushou.data.Person
+import com.bilu.paibanzhushou.data.ReleaseInfo
+import com.bilu.paibanzhushou.data.Updater
 import com.bilu.paibanzhushou.data.Store
+import com.bilu.paibanzhushou.widget.ScheduleWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -224,6 +227,8 @@ class IndexState(
         calendarMonthMs = Dates.firstOfMonth(Dates.todayStart())
         calendarWeekMs = Dates.todayStart()
         generateSchedule()
+        // 启动时静默查一次更新：有新版才弹，没有不打扰
+        checkUpdate(silent = true)
     }
 
     /** 等价 onShow：跨天后刷新（从系统设置返回时也会走到这里，权限状态顺带重新读） */
@@ -417,6 +422,8 @@ class IndexState(
         refreshTodayShift()
         // 排班一变，闹钟对应的工作日也变了，跟着重写（开关没开就什么都不做）
         if (alarmConfig.enabled) resyncAlarms()
+        // 桌面小组件显示的是同一份排班，顺手刷一下
+        ScheduleWidgetProvider.refresh(context)
         // 单日覆盖不再按一年裁剪：设到几年后也要保留
     }
 
@@ -938,6 +945,57 @@ class IndexState(
         val count = ShiftAlarm.sync(context, getActivePerson(), alarmConfig)
         alarmCount = count
         return count
+    }
+
+    // ---------- 应用内更新 ----------
+    var updateInfo by mutableStateOf<ReleaseInfo?>(null); private set
+    var updateChecking by mutableStateOf(false); private set
+    /** -1 = 未下载，0..100 = 下载进度 */
+    var updateProgress by mutableStateOf(-1); private set
+    private var updateJob: Job? = null
+
+    fun currentVersion(): String = Updater.currentVersion(context)
+
+    /** [silent] 为 true 时（启动自动检查）没有新版本不会打扰用户 */
+    fun checkUpdate(silent: Boolean = true) {
+        if (updateChecking) return
+        updateChecking = true
+        updateJob = scope.launch {
+            val latest = withContext(Dispatchers.IO) { Updater.fetchLatest(context) }
+            val cur = Updater.currentVersion(context)
+            updateChecking = false
+            if (latest != null && Updater.isNewer(latest.version, cur)) {
+                updateProgress = -1
+                updateInfo = latest
+            } else if (!silent) {
+                toast(if (latest == null) "检查更新失败，请检查网络" else "已经是最新版本（$cur）")
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        updateInfo = null
+        updateProgress = -1
+    }
+
+    fun downloadUpdate() {
+        val info = updateInfo ?: return
+        if (updateProgress in 0..99) return
+        updateProgress = 0
+        scope.launch {
+            val file = withContext(Dispatchers.IO) {
+                Updater.download(context, info) { p -> if (p >= 0) updateProgress = p }
+            }
+            if (file == null) {
+                updateProgress = -1
+                toast("下载失败，请检查网络后重试")
+                return@launch
+            }
+            updateProgress = 100
+            if (!Updater.install(context, file)) {
+                toast("请允许「安装未知应用」后再点一次更新")
+            }
+        }
     }
 
     fun banColor(ban: String): String = BanColors.get(ban)

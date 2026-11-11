@@ -9,7 +9,9 @@ import com.bilu.paibanzhushou.MainActivity
 import com.bilu.paibanzhushou.core.Dates
 import com.bilu.paibanzhushou.core.Schedule
 import com.bilu.paibanzhushou.data.AlarmConfig
+import com.bilu.paibanzhushou.data.AlarmStore
 import com.bilu.paibanzhushou.data.HolidayRepo
+import com.bilu.paibanzhushou.data.PeopleStore
 import com.bilu.paibanzhushou.data.Person
 import com.bilu.paibanzhushou.data.Store
 import org.json.JSONArray
@@ -23,6 +25,9 @@ import java.util.Calendar
  * 所以这里用 [AlarmManager.setAlarmClock] —— 它在系统层面就是「闹钟」
  * （状态栏闹钟图标、免打扰例外、精确到分钟），到点由本应用弹全屏提醒并响闹铃音。
  */
+/** 一条已写入系统的闹钟 */
+data class AlarmEntry(val date: String, val ban: String, val triggerAt: Long)
+
 object ShiftAlarm {
     const val ACTION_FIRE = "com.bilu.paibanzhushou.action.SHIFT_ALARM"
     const val EXTRA_DATE = "alarm_date"
@@ -31,6 +36,8 @@ object ShiftAlarm {
     private const val SNOOZE_RC = 8801
 
     private const val WRITTEN_KEY = "paiban_alarm_written_v1"
+    /** 用户手动取消过的单条闹钟（date#ban）：重写窗口时跳过，免得又被加回来 */
+    private const val SKIP_KEY = "paiban_alarm_skipped_v1"
 
     /** 某个人员在未来 [AlarmConfig.horizonDays] 天里，命中目标班次的日子（date 升序） */
     fun targetDays(person: Person, config: AlarmConfig, todayMs: Long = Dates.todayStart()): List<Pair<String, String>> {
@@ -68,10 +75,15 @@ object ShiftAlarm {
         }
 
         val now = System.currentTimeMillis()
+        val today = Dates.formatYmd(Dates.todayStart())
+        // 手动取消过的条目只对「还没到点的那天」有意义，过期的顺手清掉，避免无限堆积
+        val skip = skippedKeys(context).filter { it.substringBefore('#') >= today }.toMutableSet()
+        Store.writeRaw(SKIP_KEY, JSONArray(skip.toList()).toString())
+
         val desired = LinkedHashMap<String, Pair<String, String>>()
         targetDays(person, config).forEach { (date, ban) ->
             val trigger = triggerAt(date, config.hour, config.minute)
-            if (trigger > now) desired[key(date, ban)] = date to ban
+            if (trigger > now && !skip.contains(key(date, ban))) desired[key(date, ban)] = date to ban
         }
 
         // 撤销已经不需要的（改班次 / 改时间 / 关掉开关 / 换了人员）
@@ -102,6 +114,62 @@ object ShiftAlarm {
         if (written.isNotEmpty()) AlarmKeepAliveService.start(context, written.size)
         else AlarmKeepAliveService.stop(context)
         return written.size
+    }
+
+    /**
+     * 按「当前设置 + 当前人员」直接重写一遍窗口。
+     *
+     * 用处：闹钟每次响过之后顺手把 60 天窗口往后补一段。这样只要闹钟还在照常触发，
+     * 窗口就会一直往后滚，不会因为「两个月没打开过 App」而断掉。
+     */
+    fun resyncActive(context: Context): Int {
+        val config = AlarmStore.load()
+        if (!config.enabled) return 0
+        val people = runCatching {
+            PeopleStore.loadPeople(
+                Dates.formatYmd(Dates.todayStart()),
+                listOf("白班", "中班", "休息", "休息")
+            )
+        }.getOrNull() ?: return -1
+        val activeId = PeopleStore.loadActivePersonId()
+        val person = people.firstOrNull { it.id == activeId } ?: people.firstOrNull() ?: return -1
+        return sync(context, person, config)
+    }
+
+    /** 已写入的闹钟（按触发时间升序）：date / ban / 触发毫秒 */
+    fun writtenEntries(context: Context, config: AlarmConfig): List<AlarmEntry> {
+        return writtenKeys(context).mapNotNull { k ->
+            val parts = k.split("#")
+            if (parts.size != 2) null
+            else AlarmEntry(parts[0], parts[1], triggerAt(parts[0], config.hour, config.minute))
+        }.sortedBy { it.triggerAt }
+    }
+
+    /** 手动取消过的闹钟（date#ban，按日期升序），给闹钟列表页的「已取消」区用 */
+    fun skippedEntries(context: Context): List<String> = skippedKeys(context).sorted()
+
+    /** 某天某班次的闹钟开着吗（闹钟列表页用来显示「已取消 / 已加入」用不到，留着给恢复逻辑判断） */
+    fun isSkipped(context: Context, date: String, ban: String): Boolean =
+        skippedKeys(context).contains(key(date, ban))
+
+    /**
+     * 只取消某一天的闹钟：撤掉系统里的那一条，并且记下「用户主动跳过」，
+     * 之后重写窗口（改排班、开机、每次响铃后续写）都不会再把它加回来。
+     */
+    fun cancelSingle(context: Context, date: String, ban: String) {
+        cancelOne(context, date, ban)
+        val rest = writtenKeys(context).filter { it != key(date, ban) }
+        Store.writeRaw(WRITTEN_KEY, JSONArray(rest).toString())
+        val skip = skippedKeys(context).toMutableSet().apply { add(key(date, ban)) }
+        Store.writeRaw(SKIP_KEY, JSONArray(skip.toList()).toString())
+        if (rest.isEmpty()) AlarmKeepAliveService.stop(context)
+    }
+
+    /** 撤销「手动取消」，让它回到正常排班闹钟里 */
+    fun restoreSingle(context: Context, date: String, ban: String) {
+        val skip = skippedKeys(context).toMutableSet().apply { remove(key(date, ban)) }
+        Store.writeRaw(SKIP_KEY, JSONArray(skip.toList()).toString())
+        runCatching { resyncActive(context) }
     }
 
     /** 关掉开关：撤销本应用写过的全部闹钟（含「稍后提醒」用的临时闹钟） */
@@ -187,6 +255,21 @@ object ShiftAlarm {
     private fun cancelOne(context: Context, date: String, ban: String) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         runCatching { am.cancel(pendingIntent(context, date, ban)) }
+    }
+
+    private fun skippedKeys(context: Context): List<String> {
+        val raw = Store.readStringOrNull(SKIP_KEY) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            val out = ArrayList<String>(arr.length())
+            for (i in 0 until arr.length()) {
+                val s = arr.optString(i, "")
+                if (s.isNotEmpty()) out.add(s)
+            }
+            out
+        } catch (t: Throwable) {
+            emptyList()
+        }
     }
 
     private fun writtenKeys(context: Context): List<String> {

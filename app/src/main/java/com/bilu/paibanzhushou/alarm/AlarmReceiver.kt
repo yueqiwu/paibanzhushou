@@ -12,6 +12,9 @@ class AlarmReceiver : BroadcastReceiver() {
         val ban = intent.getStringExtra(ShiftAlarm.EXTRA_BAN) ?: return
         Log.i("AlarmRing", "fire date=" + date + " ban=" + ban + " fromAlarm=" + intent.getBooleanExtra(ShiftAlarm.EXTRA_FROM_ALARM_CLOCK, false))
         runCatching { ShiftAlarm.markFired(context, date, ban) }
+        // 顺手把「未来 N 天」的窗口往后补：只要闹钟还在触发，窗口就自己续上，
+        // 不需要等用户下次打开 App（否则两个月不打开，窗口用完就没闹钟了）。
+        runCatching { ShiftAlarm.resyncActive(context) }
         // ① 声音：前台服务自己放闹铃音。锁屏/后台时由系统拦掉的是「启动界面」，
         //    拦不到前台服务，所以这条路径不受全屏通知权限影响。
         AlarmRingService.start(context, date, ban)

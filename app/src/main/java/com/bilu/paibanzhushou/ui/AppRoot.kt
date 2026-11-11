@@ -95,7 +95,16 @@ fun AppRoot() {
     // 锁定 fontScale：uni 的 rpx 不受系统字体大小影响
     CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1f)) {
         Box(Modifier.fillMaxSize().background(C.pageBg)) {
-            if (route == "member") {
+            if (route == "alarms") {
+                AlarmListScreen(state = indexState, onBack = {
+                    indexState.onShow()
+                    route = "index"
+                })
+                BackHandler {
+                    indexState.onShow()
+                    route = "index"
+                }
+            } else if (route == "member") {
                 MemberTableScreen(onBack = {
                     indexState.onShow()
                     route = "index"
@@ -110,6 +119,10 @@ fun AppRoot() {
                     onOpenMemberTable = {
                         indexState.flush()
                         route = "member"
+                    },
+                    onOpenAlarmList = {
+                        indexState.flush()
+                        route = "alarms"
                     }
                 )
             }

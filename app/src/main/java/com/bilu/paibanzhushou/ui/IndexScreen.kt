@@ -103,7 +103,11 @@ import kotlin.math.roundToInt
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun IndexScreen(state: IndexState, onOpenMemberTable: () -> Unit) {
+fun IndexScreen(
+    state: IndexState,
+    onOpenMemberTable: () -> Unit,
+    onOpenAlarmList: () -> Unit
+) {
     val scrollState = rememberScrollState()
     var confettiOrigin by remember { mutableStateOf(Offset.Zero) }
     var showAlarmTime by remember { mutableStateOf(false) }
@@ -127,10 +131,11 @@ fun IndexScreen(state: IndexState, onOpenMemberTable: () -> Unit) {
                 state,
                 onConfettiOrigin = { confettiOrigin = it },
                 onPickAlarmTime = { showAlarmTime = true },
-                onPickRingtone = { showRingtone = true }
+                onPickRingtone = { showRingtone = true },
+                onOpenAlarmList = onOpenAlarmList
             )
             CalendarSection(state = state, onOpenMemberTable = onOpenMemberTable)
-            CopyrightFooter()
+            CopyrightFooter(state)
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
 
@@ -282,7 +287,8 @@ private fun ConfigCard(
     state: IndexState,
     onConfettiOrigin: (Offset) -> Unit,
     onPickAlarmTime: () -> Unit,
-    onPickRingtone: () -> Unit
+    onPickRingtone: () -> Unit,
+    onOpenAlarmList: () -> Unit
 ) {
     GlassCard(
         modifier = Modifier
@@ -358,7 +364,7 @@ private fun ConfigCard(
             exit = shrinkVertically(tween(280)) + fadeOut(tween(200))
         ) {
             Column(Modifier.fillMaxWidth()) {
-                ConfigBody(state, onConfettiOrigin, onPickAlarmTime, onPickRingtone)
+                ConfigBody(state, onConfettiOrigin, onPickAlarmTime, onPickRingtone, onOpenAlarmList)
             }
         }
     }
@@ -457,7 +463,8 @@ private fun ConfigBody(
     state: IndexState,
     onConfettiOrigin: (Offset) -> Unit,
     onPickAlarmTime: () -> Unit,
-    onPickRingtone: () -> Unit
+    onPickRingtone: () -> Unit,
+    onOpenAlarmList: () -> Unit
 ) {
     val nameFocus = remember { FocusRequester() }
     var showAnchorPicker by remember { mutableStateOf(false) }
@@ -599,7 +606,7 @@ private fun ConfigBody(
             )
         }
 
-        AlarmSection(state, onPickAlarmTime, onPickRingtone)
+        AlarmSection(state, onPickAlarmTime, onPickRingtone, onOpenAlarmList)
 
         // 保存并生成
         Row(
@@ -633,7 +640,7 @@ private fun ConfigBody(
 }
 
 @Composable
-private fun SectionLabel(text: String, topMargin: androidx.compose.ui.unit.Dp, bottomMargin: androidx.compose.ui.unit.Dp = 0.dp) {
+internal fun SectionLabel(text: String, topMargin: androidx.compose.ui.unit.Dp, bottomMargin: androidx.compose.ui.unit.Dp = 0.dp) {
     Row(
         Modifier.padding(top = topMargin, bottom = bottomMargin),
         verticalAlignment = Alignment.CenterVertically
@@ -785,7 +792,8 @@ private fun RestSettingRow(
 private fun AlarmSection(
     state: IndexState,
     onPickAlarmTime: () -> Unit,
-    onPickRingtone: () -> Unit
+    onPickRingtone: () -> Unit,
+    onOpenAlarmList: () -> Unit
 ) {
     val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -930,6 +938,27 @@ private fun AlarmSection(
         modifier = Modifier.padding(top = Rpx.dp(10))
     )
 
+    if (state.alarmConfig.enabled) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = Rpx.dp(12))
+                .clip(RoundedCornerShape(Rpx.dp(14)))
+                .background(Color(0x0A4A90E2))
+                .clickable { onOpenAlarmList() }
+                .padding(horizontal = Rpx.dp(18), vertical = Rpx.dp(16))
+        ) {
+            Text(
+                text = "查看闹钟列表，可单独取消某一天",
+                fontSize = Rpx.sp(23),
+                color = C.blue,
+                modifier = Modifier.weight(1f)
+            )
+            Text(text = "›", fontSize = Rpx.sp(30), color = C.blue)
+        }
+    }
+
     // 闹钟依赖的系统权限：逐条列出来，缺的可以一键跳设置页
     val perms = state.alarmPermissions
     val missing = perms.count { !it.ok }
@@ -1006,13 +1035,14 @@ private fun AlarmPermissionRow(perm: AlarmPermission, onOpen: () -> Unit) {
 /* ---------------- 版权 ---------------- */
 
 @Composable
-private fun CopyrightFooter() {
+private fun CopyrightFooter(state: IndexState) {
     Column(
         Modifier
             .fillMaxWidth()
             .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(36), bottom = Rpx.dp(20)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        UpdateSection(state)
         Text(
             text = "该软件仅供个人使用，请勿商用。",
             fontSize = Rpx.sp(22),
@@ -1026,6 +1056,128 @@ private fun CopyrightFooter() {
             lineHeight = Rpx.sp(38),
             modifier = Modifier.padding(top = Rpx.dp(6))
         )
+    }
+}
+
+/* ---------------- 版本 / 检查更新 ---------------- */
+
+/** Release notes 是 markdown，卡片里只留纯文本前几行 */
+private fun plainNotes(raw: String): String {
+    return raw.lineSequence()
+        .map { it.trim().trimStart('#', '*', '-', ' ').trim() }
+        .filter { it.isNotEmpty() }
+        .take(3)
+        .joinToString("\n")
+}
+
+@Composable
+private fun UpdateSection(state: IndexState) {
+    val info = state.updateInfo
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (info == null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "当前版本 " + state.currentVersion(),
+                    fontSize = Rpx.sp(22),
+                    color = Color(0x610B1020)
+                )
+                Text(
+                    text = " · " + if (state.updateChecking) "正在检查…" else "检查更新",
+                    fontSize = Rpx.sp(22),
+                    color = Color(0xFF4A90E2),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(Rpx.dp(8)))
+                        .clickable { state.checkUpdate(silent = false) }
+                        .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
+                )
+            }
+        } else {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(Rpx.dp(20)))
+                    .background(Color(0xF2FFFFFF))
+                    .padding(Rpx.dp(18))
+            ) {
+                Text(
+                    text = "发现新版本 v" + info.version,
+                    fontSize = Rpx.sp(24),
+                    fontWeight = FontWeight.SemiBold,
+                    color = C.textPrimary
+                )
+                val notes = remember(info.notes) { plainNotes(info.notes) }
+                if (notes.isNotBlank()) {
+                    Text(
+                        text = notes,
+                        fontSize = Rpx.sp(20),
+                        lineHeight = Rpx.sp(32),
+                        color = C.textSub,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = Rpx.dp(6))
+                    )
+                }
+                val p = state.updateProgress
+                if (p in 0..99) {
+                    Text(
+                        text = "正在下载 $p%",
+                        fontSize = Rpx.sp(21),
+                        color = C.blue,
+                        modifier = Modifier.padding(top = Rpx.dp(10))
+                    )
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = Rpx.dp(6))
+                            .height(Rpx.dp(6))
+                            .clip(RoundedCornerShape(Rpx.dp(3)))
+                            .background(Color(0x14000000))
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth((p.coerceIn(0, 100)) / 100f)
+                                .height(Rpx.dp(6))
+                                .clip(RoundedCornerShape(Rpx.dp(3)))
+                                .background(C.blue)
+                        )
+                    }
+                } else {
+                    Row(
+                        Modifier.padding(top = Rpx.dp(12)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(Rpx.dp(999)))
+                                .background(C.blue)
+                                .clickable { state.downloadUpdate() }
+                                .padding(horizontal = Rpx.dp(22), vertical = Rpx.dp(10))
+                        ) {
+                            Text(
+                                text = "下载并安装",
+                                fontSize = Rpx.sp(22),
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Text(
+                            text = "稍后",
+                            fontSize = Rpx.sp(22),
+                            color = C.textSub,
+                            modifier = Modifier
+                                .padding(start = Rpx.dp(18))
+                                .clip(RoundedCornerShape(Rpx.dp(8)))
+                                .clickable { state.dismissUpdate() }
+                                .padding(horizontal = Rpx.dp(6), vertical = Rpx.dp(6))
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(Rpx.dp(14)))
     }
 }
 

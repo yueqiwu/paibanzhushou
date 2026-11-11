@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="12dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/w_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="班表小历" android:textColor="#0B1020" android:textSize="14sp" android:textStyle="bold" />
+        <TextView android:id="@+id/w_person" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="end" android:text="" android:textColor="#7A8494" android:textSize="12sp" />
+    </LinearLayout>
+    <TextView android:id="@+id/w_range" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="" android:textColor="#9AA3B2" android:textSize="10sp" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="26dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/w_date0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textColor="#333333" android:textSize="12sp" />
+        <TextView android:id="@+id/w_ban0" android:layout_width="92dp" android:layout_height="20dp" android:gravity="center" android:text="" android:textColor="#FFFFFF" android:textSize="11sp" android:background="#F0F0F0" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="26dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/w_date1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textColor="#333333" android:textSize="12sp" />
+        <TextView android:id="@+id/w_ban1" android:layout_width="92dp" android:layout_height="20dp" android:gravity="center" android:text="" android:textColor="#FFFFFF" android:textSize="11sp" android:background="#F0F0F0" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="26dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/w_date2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textColor="#333333" android:textSize="12sp" />
+        <TextView android:id="@+id/w_ban2" android:layout_width="92dp" android:layout_height="20dp" android:gravity="center" android:text="" android:textColor="#FFFFFF" android:textSize="11sp" android:background="#F0F0F0" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="26dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/w_date3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textColor="#333333" android:textSize="12sp" />
+        <TextView android:id="@+id/w_ban3" android:layout_width="92dp" android:layout_height="20dp" android:gravity="center" android:text="" android:textColor="#FFFFFF" android:textSize="11sp" android:background="#F0F0F0" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="26dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/w_date4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textColor="#333333" android:textSize="12sp" />
+        <TextView android:id="@+id/w_ban4" android:layout_width="92dp" android:layout_height="20dp" android:gravity="center" android:text="" android:textColor="#FFFFFF" android:textSize="11sp" android:background="#F0F0F0" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="26dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/w_date5" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textColor="#333333" android:textSize="12sp" />
+        <TextView android:id="@+id/w_ban5" android:layout_width="92dp" android:layout_height="20dp" android:gravity="center" android:text="" android:textColor="#FFFFFF" android:textSize="11sp" android:background="#F0F0F0" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="26dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/w_date6" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textColor="#333333" android:textSize="12sp" />
+        <TextView android:id="@+id/w_ban6" android:layout_width="92dp" android:layout_height="20dp" android:gravity="center" android:text="" android:textColor="#FFFFFF" android:textSize="11sp" android:background="#F0F0F0" />
+    </LinearLayout>
+</LinearLayout>

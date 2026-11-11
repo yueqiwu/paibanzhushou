@@ -69,6 +69,29 @@ class AlarmRingService : Service() {
     private val hideOverlay = Runnable { hideBalOverlay() }
 
     /**
+     * 让手表持续震动（1.0.13）。
+     *
+     * 手表收到一条通知只会震一下，没法主动循环震；而响铃期间我们本来就要持续提醒，
+     * 所以每 12 秒刷新一次同一条镜像通知（正文带「已响铃 mm:ss」），
+     * 手表的通知桥会把它当成新提醒再震一次，效果就是持续震动。
+     * 手机上这条通道是静音的，不会每 12 秒跟着响一声。
+     */
+    private var watchTicks = 0
+    private val watchPing = object : Runnable {
+        override fun run() {
+            if (!active) return
+            watchTicks++
+            runCatching {
+                AlarmNotifications.updateWatchPing(
+                    this@AlarmRingService, dateText, banText,
+                    (watchTicks * (WATCH_PING_MS / 1000)).toInt()
+                )
+            }
+            handler.postDelayed(this, WATCH_PING_MS)
+        }
+    }
+
+    /**
      * 电源键 = 停铃。
      *
      * 应用收不到 KEYCODE_POWER（系统自己消费），所以用屏幕状态广播模拟「按一下电源键」：
@@ -136,6 +159,9 @@ class AlarmRingService : Service() {
             handler.postDelayed(startRingPage, 300)
             handler.postDelayed(hideOverlay, 4000)
         }
+        handler.removeCallbacks(watchPing)
+        watchTicks = 0
+        handler.postDelayed(watchPing, WATCH_PING_MS)
         handler.removeCallbacks(autoStop)
         // 兜底：5 分钟后自动停，避免没人处理一直响
         handler.postDelayed(autoStop, 5 * 60 * 1000L)
@@ -280,6 +306,7 @@ class AlarmRingService : Service() {
         handler.removeCallbacks(autoStop)
         handler.removeCallbacks(startRingPage)
         handler.removeCallbacks(hideOverlay)
+        handler.removeCallbacks(watchPing)
         hideBalOverlay()
         unregisterScreenWatcher()
         stopRinging()
@@ -295,6 +322,7 @@ class AlarmRingService : Service() {
         handler.removeCallbacks(autoStop)
         handler.removeCallbacks(startRingPage)
         handler.removeCallbacks(hideOverlay)
+        handler.removeCallbacks(watchPing)
         hideBalOverlay()
         unregisterScreenWatcher()
         stopRinging()
@@ -351,6 +379,13 @@ class AlarmRingService : Service() {
         private const val TAG = "AlarmRing"
         private const val CHANNEL_ID = "alarm_ringing"
         private const val NOTIF_ID = 9103
+        /**
+         * 手表镜像通知的刷新间隔。
+         *
+         * 手表的通知桥只在「收到一条新提醒」时震一下，没法让它长震，所以只能靠缩短间隔逼近「持续震动」：
+         * 12 秒一次实测体感太弱（用户反馈），改成 3 秒一次，基本是连着震。
+         */
+        private const val WATCH_PING_MS = 2000L
         /** 是否正在响铃；响铃页靠它判断「是不是已经被别人关掉了」 */
         @Volatile var active = false
             private set
