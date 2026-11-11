@@ -866,6 +866,34 @@ private fun AlarmSection(state: IndexState, onPickAlarmTime: () -> Unit) {
         modifier = Modifier.padding(top = Rpx.dp(10))
     )
 
+    // 缺权限时到点只会静默弹一条通知，所以这里必须显式告诉用户，并给一键跳转
+    state.alarmWarn?.let { warn ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = Rpx.dp(14))
+                .clip(RoundedCornerShape(Rpx.dp(16)))
+                .background(Color(0x14E53935))
+                .clickable { state.openAlarmPermissionSettings() }
+                .padding(horizontal = Rpx.dp(18), vertical = Rpx.dp(14)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = warn,
+                fontSize = Rpx.sp(22),
+                color = Color(0xFFE53935),
+                lineHeight = Rpx.sp(32),
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "去开启",
+                fontSize = Rpx.sp(22),
+                color = Color(0xFFE53935),
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = Rpx.dp(10))
+            )
+        }
+    }
 }
 
 /* ---------------- 版权 ---------------- */

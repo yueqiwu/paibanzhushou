@@ -2,16 +2,8 @@ package com.bilu.paibanzhushou.alarm
 
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
-import android.media.AudioManager
-import android.media.MediaPlayer
-import android.media.RingtoneManager
 import android.os.Build
 import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -51,18 +43,11 @@ import java.util.Locale
 /**
  * 闹钟到点后的全屏响铃页。
  *
- * 以前只发一条通知（响一声就结束），用户反馈「只是通知、不会响铃」，
- * 所以这里做成真正的闹钟：全屏亮起 + 循环闹铃音 + 震动，必须点「关闭」才停。
- *
- * 进入方式：
- * 1) 通知的全屏 intent（AlarmNotifications 里 setFullScreenIntent），锁屏/息屏也能拉起；
- * 2) AlarmReceiver 直接 startActivity 兜底。
+ * 声音不在这里放：Android 14+ 没授予「全屏通知」时，后台起 Activity 会被系统以 BAL_BLOCK
+ * 直接拒掉，界面根本不会出现。所以铃声交由 [AlarmRingService] 播放，本页只负责显示和按钮，
+ * 用户点「关闭 / 稍后提醒」后再去把服务停掉。
  */
 class AlarmRingActivity : ComponentActivity() {
-
-    private var player: MediaPlayer? = null
-    private var vibrator: Vibrator? = null
-    private var focusRequest: AudioFocusRequest? = null
 
     private var dateText by mutableStateOf("")
     private var banText by mutableStateOf("")
@@ -83,13 +68,23 @@ class AlarmRingActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
 
         handleIntent(intent)
-        startRinging()
+        // 通知上的「关闭闹钟 / 5 分钟后提醒」也会拉起本页并带上动作，这里直接照做，不显示界面
+        when (intent?.getStringExtra(EXTRA_ACTION)) {
+            ACTION_DISMISS -> {
+                dismissAll()
+                return
+            }
+            ACTION_SNOOZE -> {
+                snoozeAndFinish()
+                return
+            }
+        }
 
         setContent {
             AlarmRingScreen(
                 date = dateText,
                 ban = banText,
-                onDismiss = { stopAndFinish() },
+                onDismiss = { dismissAll() },
                 onSnooze = { snoozeAndFinish() }
             )
         }
@@ -98,13 +93,19 @@ class AlarmRingActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val action = intent.getStringExtra(EXTRA_ACTION)
-        when (action) {
-            ACTION_DISMISS -> stopAndFinish()
+        when (intent.getStringExtra(EXTRA_ACTION)) {
+            ACTION_DISMISS -> dismissAll()
             ACTION_SNOOZE -> snoozeAndFinish()
             else -> {
                 handleIntent(intent)
-                startRinging()
+                setContent {
+                    AlarmRingScreen(
+                        date = dateText,
+                        ban = banText,
+                        onDismiss = { dismissAll() },
+                        onSnooze = { snoozeAndFinish() }
+                    )
+                }
             }
         }
     }
@@ -114,81 +115,8 @@ class AlarmRingActivity : ComponentActivity() {
         banText = intent?.getStringExtra(ShiftAlarm.EXTRA_BAN) ?: "班次"
     }
 
-    // ---------- 响铃 ----------
-
-    private fun startRinging() {
-        if (player != null) return
-        runCatching {
-            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            val attrs = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                    .setAudioAttributes(attrs)
-                    .build()
-                focusRequest = req
-                am.requestAudioFocus(req)
-            } else {
-                @Suppress("DEPRECATION")
-                am.requestAudioFocus(null, AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-            }
-            am.ringerMode // 不强制改铃声模式，但 USAGE_ALARM 在静音/免打扰下仍会响（系统允许闹钟）
-            player = MediaPlayer().apply {
-                setAudioAttributes(attrs)
-                setDataSource(this@AlarmRingActivity, uri)
-                isLooping = true
-                prepare()
-                start()
-            }
-        }.onFailure { android.util.Log.w("AlarmRing", "play failed", it) }
-        startVibrating()
-        // 兜底：5 分钟后自动停，避免无人处理一直响
-        window.decorView.postDelayed({ if (!isFinishing) stopAndFinish() }, 5 * 60 * 1000L)
-    }
-
-    private fun startVibrating() {
-        runCatching {
-            val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-            }
-            vibrator = v
-            val pattern = longArrayOf(0, 700, 500, 700, 500, 1200)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                v.vibrate(VibrationEffect.createWaveform(pattern, 0))
-            } else {
-                @Suppress("DEPRECATION")
-                v.vibrate(pattern, 0)
-            }
-        }
-    }
-
-    private fun stopRinging() {
-        runCatching { player?.stop() }
-        runCatching { player?.release() }
-        player = null
-        runCatching { vibrator?.cancel() }
-        vibrator = null
-        runCatching {
-            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                focusRequest?.let { am.abandonAudioFocusRequest(it) }
-            } else {
-                @Suppress("DEPRECATION")
-                am.abandonAudioFocus(null)
-            }
-        }
-        focusRequest = null
-    }
-
-    private fun stopAndFinish() {
-        stopRinging()
+    private fun dismissAll() {
+        AlarmRingService.stop(this)
         AlarmNotifications.cancel(this, dateText, banText)
         finish()
     }
@@ -196,12 +124,7 @@ class AlarmRingActivity : ComponentActivity() {
     private fun snoozeAndFinish() {
         val minutes = intent?.getIntExtra(EXTRA_SNOOZE_MIN, 5) ?: 5
         ShiftAlarm.scheduleSnooze(this, dateText, banText, minutes)
-        stopAndFinish()
-    }
-
-    override fun onDestroy() {
-        stopRinging()
-        super.onDestroy()
+        dismissAll()
     }
 
     companion object {

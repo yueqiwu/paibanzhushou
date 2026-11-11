@@ -1,13 +1,17 @@
 package com.bilu.paibanzhushou.alarm
 
 import android.Manifest
+import android.app.AppOpsManager
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
+import android.os.Process
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.bilu.paibanzhushou.MainActivity
@@ -15,31 +19,53 @@ import com.bilu.paibanzhushou.MainActivity
 /**
  * 班次闹钟到点后的通知：高优先级 + 全屏 intent（拉起 [AlarmRingActivity]）+ 关闭/稍后提醒按钮。
  *
- * 注意：响铃本身由 [AlarmRingActivity] 用 MediaPlayer 循环播放（USAGE_ALARM），
- * 这里的通道故意不放声音，避免「通知响一声 + 页面循环响」两路声音叠在一起。
- * 如果系统没允许全屏通知、页面起不来，用户仍会看到这条常驻通知并可以点按钮处理。
+ * 1.0.9 修复「到点只弹一条通知、不响铃」：
+ * - 老通道 shift_alarm_ring_v1 建的时候被系统降成了 IMPORTANCE_DEFAULT（曾用 setSilent(true)），
+ *   而全屏 intent 只在通道重要性 >= HIGH 时才会被系统执行，于是锁屏/后台只会看到一条通知。
+ *   这里改用新通道 v2，并显式把通道重要性拉到 HIGH，同时不再 setSilent。
+ * - 通道本身带闹铃音轨（USAGE_ALARM），所以就算系统没允许「全屏通知」，
+ *   通知也会按闹铃音量响一声 + 震动，而不是静默一条。
  */
 object AlarmNotifications {
-    private const val CHANNEL_ID = "shift_alarm_ring_v1"
-    private const val LEGACY_CHANNEL_ID = "shift_alarm"
+    private const val CHANNEL_ID = "shift_alarm_ring_v2"
+    private val LEGACY_CHANNEL_IDS = listOf("shift_alarm_ring_v1", "shift_alarm")
+
+    private fun ringtoneUri(): android.net.Uri {
+        return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+    }
 
     private fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-            val attrs = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-            val channel = NotificationChannel(CHANNEL_ID, "班次闹钟（响铃）", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "排到需要上班的班次时全屏响铃提醒"
-                setSound(null, attrs)
-                enableVibration(false)
-                setBypassDnd(true)
-                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-            }
-            nm.createNotificationChannel(channel)
+        LEGACY_CHANNEL_IDS.forEach { runCatching { nm.deleteNotificationChannel(it) } }
+
+        val existing = runCatching { nm.getNotificationChannel(CHANNEL_ID) }.getOrNull()
+        if (existing != null && existing.importance >= NotificationManager.IMPORTANCE_HIGH) return
+        // 存在但被降过级（用户改过 / 系统降级）→ 删掉重建，恢复 HIGH
+        if (existing != null) runCatching { nm.deleteNotificationChannel(CHANNEL_ID) }
+
+        val attrs = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "班次闹钟（响铃）",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "排到需要上班的班次时全屏响铃提醒"
+            // 声音由 AlarmRingService 的 MediaPlayer 负责（界面可能被系统拦掉，服务不会），
+            // 这里留空避免两条音轨叠在一起变成回声；震动保留，作为额外的触觉提示。
+            setSound(null, null)
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 700, 500, 700, 500, 1200)
+            setBypassDnd(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setShowBadge(true)
         }
+        runCatching { nm.createNotificationChannel(channel) }
     }
 
     /** 是否有通知权限（没有就不发，避免系统静默丢） */
@@ -50,11 +76,26 @@ object AlarmNotifications {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    /** 系统是否允许本应用使用「全屏通知」（Android 14+ 需要用户/系统授予） */
+    /**
+     * 系统是否允许本应用使用「全屏通知」（Android 14+）。
+     *
+     * 两个来源任一为「允许」即可：ColorOS 的开关是 uid 级 appop（查询 package 级仍是 default，
+     * 但 [NotificationManager.canUseFullScreenIntent] 返回 true），纯 AOSP 上则要看 appop。
+     */
     fun canUseFullScreen(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return false
-        return nm.canUseFullScreenIntent()
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        if (nm != null && runCatching { nm.canUseFullScreenIntent() }.getOrDefault(false)) return true
+        val am = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return true
+        val mode = runCatching {
+            am.unsafeCheckOpNoThrow(
+                // AppOpsManager.OPSTR_USE_FULL_SCREEN_INTENT（预览版 SDK 里没有这个常量）
+                "android:use_full_screen_intent",
+                Process.myUid(),
+                context.packageName
+            )
+        }.getOrNull() ?: return true
+        return mode == AppOpsManager.MODE_ALLOWED
     }
 
     fun showRinging(context: Context, date: String, ban: String) {
@@ -96,7 +137,7 @@ object AlarmNotifications {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(false)
-            .setSilent(true)
+            .setOnlyAlertOnce(false)
             .setContentIntent(fullPi)
             .setFullScreenIntent(fullPi, true)
             .setDeleteIntent(openApp)
@@ -108,7 +149,6 @@ object AlarmNotifications {
     fun cancel(context: Context, date: String, ban: String) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         runCatching { nm.cancel(notificationId(date, ban)) }
-        runCatching { nm.cancel(LEGACY_CHANNEL_ID.hashCode()) }
     }
 
     private fun notificationId(date: String, ban: String) = (date + "#" + ban).hashCode()

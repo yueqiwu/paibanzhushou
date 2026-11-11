@@ -28,8 +28,10 @@ android {
         // 1.0.6 修节假日数据源：某年接口返回空对象时不再吞掉备源（2027 年假/班标记）；
         // 1.0.7 修班次闹钟的响铃时间选择：Dialog 里的滚轮一拖就被判成点到外面而关掉，改为应用内浮层
         // 1.0.8 到点改成真正的全屏响铃页（循环闹铃音 + 震动 + 关闭/稍后提醒），并加常驻前台服务
-        versionCode = 108
-        versionName = "1.0.8"
+        // 1.0.9 修后台/锁屏不响：响铃通道改用 IMPORTANCE_HIGH + 闹铃音轨（旧通道被 setSilent 降成
+        //       DEFAULT，导致全屏 intent 不被系统执行），并检测「全屏通知」权限、缺权限时页面红条提示
+        versionCode = 109
+        versionName = "1.0.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

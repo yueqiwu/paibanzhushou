@@ -78,6 +78,16 @@
             android:theme="@style/Theme.Paibanzhushou.Alarm"
             android:turnScreenOn="true" />
 
+        <!-- 到点响铃：声音由这个前台服务播放，不依赖界面能否被拉起 -->
+        <service
+            android:name=".alarm.AlarmRingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="alarm" />
+        </service>
+
         <!-- 常驻前台服务：开着班次闹钟时保持进程活跃，避免 ROM 把闹钟延后 -->
         <service
             android:name=".alarm.AlarmKeepAliveService"

@@ -14,6 +14,7 @@ import com.bilu.paibanzhushou.core.BanColors
 import com.bilu.paibanzhushou.core.Dates
 import com.bilu.paibanzhushou.core.Schedule
 import com.bilu.paibanzhushou.core.SelectedEntry
+import com.bilu.paibanzhushou.alarm.AlarmNotifications
 import com.bilu.paibanzhushou.alarm.ShiftAlarm
 import com.bilu.paibanzhushou.data.AlarmConfig
 import com.bilu.paibanzhushou.data.AlarmStore
@@ -96,6 +97,10 @@ class IndexState(
 
     /** 最近一次同步到系统里的闹钟数量（给设置页文案用） */
     var alarmCount by mutableIntStateOf(0)
+        private set
+
+    /** 闹钟权限告警（null = 一切正常）。设置页据此显示红色提示条 */
+    var alarmWarn by mutableStateOf<String?>(null)
         private set
 
     var anchorDate by mutableStateOf(Dates.formatYmd(Dates.todayStart()))
@@ -196,6 +201,7 @@ class IndexState(
         loadAlarmConfig()
         loadPeople()
         loadHolidayAndBanList()
+        refreshAlarmWarn()
         todayStr = Dates.formatYmd(Dates.todayStart())
         calendarDateMs = Dates.todayStart()
         calendarMonthMs = Dates.firstOfMonth(Dates.todayStart())
@@ -205,6 +211,7 @@ class IndexState(
 
     /** 等价 onShow：跨天后刷新 */
     fun onShow() {
+        refreshAlarmWarn()
         val now = Dates.formatYmd(Dates.todayStart())
         if (now != todayStr) {
             todayStr = now
@@ -730,6 +737,7 @@ class IndexState(
         if (!enabled) {
             ShiftAlarm.cancelAll(context)
             alarmCount = 0
+            refreshAlarmWarn()
             toast("已关闭班次闹钟")
             return
         }
@@ -745,6 +753,7 @@ class IndexState(
             requestFullScreenPermission()
         }
         val count = resyncAlarms()
+        refreshAlarmWarn()
         toast(
             when {
                 count > 0 -> "已写入 " + count + " 个闹钟"
@@ -773,6 +782,34 @@ class IndexState(
         val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
         runCatching { context.startActivity(direct.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { runCatching { context.startActivity(fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+    }
+
+    /**
+     * 检查「闹钟真的能不能响」：通知权限 + Android 14+ 的全屏通知。
+     * 缺任何一个，到点都只会静默或只弹一条通知，所以页面上要显式提示。
+     */
+    fun refreshAlarmWarn() {
+        alarmWarn = when {
+            !alarmConfig.enabled -> null
+            !AlarmNotifications.canPost(context) -> "缺少通知权限，闹钟到点不会响"
+            !AlarmNotifications.canUseFullScreen(context) -> "没开「全屏通知」，锁屏或后台时闹钟只会弹一条通知"
+            else -> null
+        }
+    }
+
+    /** 去补权限：优先「全屏通知」，否则应用通知设置 */
+    fun openAlarmPermissionSettings() {
+        val fsi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:" + context.packageName))
+        } else null
+        val notif = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        val app = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
+        val attempts = if (AlarmNotifications.canUseFullScreen(context)) listOf(notif, app) else listOfNotNull(fsi, notif, app)
+        for (i in attempts) {
+            val ok = runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+            if (ok) return
+        }
     }
 
     /** 按当前人员和设置重写系统闹钟；返回写入数量 */

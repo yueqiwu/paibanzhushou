@@ -6,7 +6,7 @@
 使用 Kotlin + Jetpack Compose 重写，UI 尺寸、配色、文案、交互与业务规则均对准源项目；**wgt 热更新相关代码已丢弃**。
 
 - 包名 / applicationId：`com.bilu.paibanzhushou`
-- 当前发布版本：**versionName 1.0.8，versionCode 108**（初始移植版本对齐源 manifest.json 的 1.0.3 / 102；1.0.4 起日历不再限制前后一年；1.0.6 修节假日数据源 + 新增班次闹钟；1.0.7 修响铃时间选择弹层的滚轮被误关问题；1.0.8 闹钟到点改为全屏响铃页 + 循环闹铃音 + 关闭/稍后提醒，并加常驻前台服务与残留闹钟清理）
+- 当前发布版本：**versionName 1.0.9，versionCode 109**（初始移植版本对齐源 manifest.json 的 1.0.3 / 102；1.0.4 起日历不再限制前后一年；1.0.6 修节假日数据源 + 新增班次闹钟；1.0.7 修响铃时间选择弹层的滚轮被误关问题；1.0.8 闹钟到点改为全屏响铃页 + 循环闹铃音 + 关闭/稍后提醒，并加常驻前台服务与残留闹钟清理；1.0.9 修复「App 在后台或锁屏时闹钟不响」——精确闹钟广播下由前台服务自己播放闹铃音，不再依赖被系统 BAL 拦掉的全屏页）
 - minSdk 24（Android 7.0），targetSdk 37，Compose Material3
 - 无第三方运行时依赖：持久化用 SharedPreferences，网络用 HttpURLConnection，JSON 用 org.json
 
@@ -14,12 +14,12 @@
 
 | | |
 | --- | --- |
-| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.8.apk>（8,676,842 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.8/banbiaoxiaoli-1.0.8.apk> |
+| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.9.apk>（8,676,874 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.9/banbiaoxiaoli-1.0.9.apk> |
 | 官网（GitHub Pages） | <https://yueqiwu.github.io/paibanzhushou/> |
 | 官网（自有域名） | <https://qipaclub.top/paibanzhushou/>（宝塔站点 `c:/wwwroot/qipaclub.top/paibanzhushou`，APK 也在该目录，官网直链下载） |
 | 源码 | <https://github.com/yueqiwu/paibanzhushou> |
-| 版本 / Release | v1.0.8（versionCode 108，正式签名） |
-| 包校验 | SHA-256 `E277EAAEE90434349D51DC422B8431D353A480FCAD32589A2ABD82E10095F2FC` |
+| 版本 / Release | v1.0.9（versionCode 109，正式签名） |
+| 包校验 | SHA-256 `849963C26BA5708A3752309F757EEC37A191EB1B6F1A88B9521B8058CEB5ECDA` |
 
 官网源码就是本仓库的 `docs/` 目录（纯静态 `index.html` + `style.css` + `img/`，全部相对路径），
 可直接整目录拷到任意静态站点的子路径下，例如 `qipaclub.top/paibanzhushou/`。
@@ -106,7 +106,7 @@ app/src/main/java/com/bilu/paibanzhushou/
 | 月历（农历、左右滑动翻页、翻月、选月、折叠、今天、单日覆盖） | wu-calendar + ban-picker | CalendarSection + BanPickerSheet |
 | 同事排班对比（月份切换/选择月份、横向滚动、吸顶、今日高亮并自动滚动） | member_table.vue | MemberTableScreen（表头与每行共享同一个 `ScrollState` + `horizontalScroll`，人员多于一屏可左滑，姓名不截断） |
 | 节假日数据（每日拉取一次并缓存） | loadHolidayAndBanList | HolidayRepo（1.0.6 起主源返回空数据会继续回落到 holiday-cn，且缓存带 `ver`，旧缓存自动重拉） |
-| 班次闹钟（按日期写系统精确闹钟；到点全屏响铃页 + 循环闹铃音 + 震动 + 关闭/5 分钟后提醒；重启与改排班自动重写；常驻前台服务保持活跃） | 无（新增需求） | `alarm/ShiftAlarm` + `AlarmReceiver` + `BootReceiver` + `AlarmNotifications` + `alarm/AlarmRingActivity` + `alarm/AlarmKeepAliveService` + `data/AlarmSettings` |
+| 班次闹钟（按日期写系统精确闹钟；到点全屏响铃页 + 循环闹铃音 + 震动 + 关闭/5 分钟后提醒；重启与改排班自动重写；常驻前台服务保持活跃） | 无（新增需求） | `alarm/ShiftAlarm` + `AlarmReceiver` + `BootReceiver` + `AlarmNotifications` + `alarm/AlarmRingActivity` + `alarm/AlarmRingService` + `alarm/AlarmKeepAliveService` + `data/AlarmSettings` |
 | 跨天刷新、进后台补写盘 | onShow / onHide | AppRoot 生命周期回调 |
 
 ## 有意省略（按需求）
