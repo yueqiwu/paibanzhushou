@@ -32,9 +32,10 @@ android {
         // 1.0.10 响铃时按电源键（屏幕状态切换）即停铃；通知动作改走 Service 并补 Wearable 动作，手表也能关
         // 1.0.11 设置页加「闹钟权限」清单：逐项显示通知/精确闹钟/后台弹出界面/全屏通知是否开启，缺的可一键跳系统设置
         // 1.0.12 新增「闹钟铃声」：可选系统默认 / 静音（只震动）/ 任意系统闹钟铃声，带试听
-        // 1.0.13 响铃时额外发一条「非常驻」通知，供 ColorOS 手表（OPPO Watch）镜像显示；划掉即关闭闹钟
-        versionCode = 113
-        versionName = "1.0.13"
+        // 1.0.14 桌面小组件重新设计（2:1 卡片、7 天横排、圆角药丸、今天高亮）
+    // 1.0.13 响铃时额外发一条「非常驻」通知，供 ColorOS 手表（OPPO Watch）镜像显示；划掉即关闭闹钟
+        versionCode = 114
+        versionName = "1.0.14"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
