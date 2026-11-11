@@ -42,6 +42,14 @@ data class PickerState(
     val allowClear: Boolean = false
 )
 
+/** 闹钟相关的一项系统权限/设置 */
+data class AlarmPermission(
+    val id: String,
+    val title: String,
+    val desc: String,
+    val ok: Boolean
+)
+
 /** 确认弹窗 */
 data class ConfirmState(
     val title: String,
@@ -75,6 +83,12 @@ class IndexState(
         const val BAN_OPTIONS_VERSION = 2
         const val PICKER_MODE_CYCLE = "cycle"
         const val PICKER_MODE_DAY = "day"
+
+        // 闹钟权限项 id（见 alarmPermissions）
+        const val PERM_NOTIF = "notif"
+        const val PERM_EXACT = "exact"
+        const val PERM_OVERLAY = "overlay"
+        const val PERM_FSI = "fsi"
     }
 
     val dragController = DragSortController()
@@ -101,6 +115,9 @@ class IndexState(
 
     /** 闹钟权限告警（null = 一切正常）。设置页据此显示红色提示条 */
     var alarmWarn by mutableStateOf<String?>(null)
+
+    /** 权限状态的刷新计数：系统设置里改完回来要重新读一遍 */
+    var permissionTick by mutableIntStateOf(0)
         private set
 
     var anchorDate by mutableStateOf(Dates.formatYmd(Dates.todayStart()))
@@ -209,9 +226,9 @@ class IndexState(
         generateSchedule()
     }
 
-    /** 等价 onShow：跨天后刷新 */
+    /** 等价 onShow：跨天后刷新（从系统设置返回时也会走到这里，权限状态顺带重新读） */
     fun onShow() {
-        refreshAlarmWarn()
+        refreshPermissions()
         val now = Dates.formatYmd(Dates.todayStart())
         if (now != todayStr) {
             todayStr = now
@@ -809,6 +826,81 @@ class IndexState(
                 "没开「后台弹出界面」，锁屏或后台时不会弹出响铃页（铃声不受影响）"
             !AlarmNotifications.canUseFullScreen(context) -> "没开「全屏通知」，锁屏或后台时闹钟只会弹一条通知"
             else -> null
+        }
+    }
+
+    /**
+     * 闹钟需要的系统权限一览（页面里逐条显示，缺的可以一键跳设置）。
+     * 读 [permissionTick] 是为了让 Compose 在 tick 变化后重新取一遍真实状态。
+     */
+    val alarmPermissions: List<AlarmPermission>
+        get() {
+            permissionTick
+            return listOf(
+                AlarmPermission(
+                    id = PERM_NOTIF,
+                    title = "通知权限",
+                    desc = "闹钟到点靠通知提醒，没授权会只剩铃声、锁屏看不到提示",
+                    ok = AlarmNotifications.canPost(context)
+                ),
+                AlarmPermission(
+                    id = PERM_EXACT,
+                    title = "闹钟和提醒（精确闹钟）",
+                    desc = "没有它系统会延后触发，闹钟可能晚几分钟才响",
+                    ok = ShiftAlarm.canScheduleExact(context)
+                ),
+                AlarmPermission(
+                    id = PERM_OVERLAY,
+                    title = "后台弹出界面（悬浮窗）",
+                    desc = "允许后，App 在后台时会弹出全屏响铃页；铃声不需要它",
+                    ok = AlarmNotifications.canDrawOverlays(context)
+                ),
+                AlarmPermission(
+                    id = PERM_FSI,
+                    title = "全屏通知",
+                    desc = "锁屏时自动亮屏显示响铃页（部分机型叫「锁屏显示」）",
+                    ok = AlarmNotifications.canUseFullScreen(context)
+                )
+            )
+        }
+
+    /** 刷新权限状态（从系统设置返回时调用） */
+    fun refreshPermissions() {
+        permissionTick++
+        refreshAlarmWarn()
+    }
+
+    /** 跳到某一项权限对应的系统设置页 */
+    fun openAlarmPermission(id: String) {
+        val pkg = Uri.parse("package:" + context.packageName)
+        val app = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
+        val candidates: List<Intent> = when (id) {
+            PERM_NOTIF -> listOf(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+                app
+            )
+            PERM_EXACT -> listOfNotNull(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg)
+                } else null,
+                app
+            )
+            PERM_OVERLAY -> listOf(
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkg),
+                app
+            )
+            PERM_FSI -> listOfNotNull(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg)
+                } else null,
+                app
+            )
+            else -> listOf(app)
+        }
+        for (i in candidates) {
+            val ok = runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+            if (ok) return
         }
     }
 

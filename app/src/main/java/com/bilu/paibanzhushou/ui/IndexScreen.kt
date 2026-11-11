@@ -866,32 +866,75 @@ private fun AlarmSection(state: IndexState, onPickAlarmTime: () -> Unit) {
         modifier = Modifier.padding(top = Rpx.dp(10))
     )
 
-    // 缺权限时到点只会静默弹一条通知，所以这里必须显式告诉用户，并给一键跳转
-    state.alarmWarn?.let { warn ->
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(top = Rpx.dp(14))
-                .clip(RoundedCornerShape(Rpx.dp(16)))
-                .background(Color(0x14E53935))
-                .clickable { state.openAlarmPermissionSettings() }
-                .padding(horizontal = Rpx.dp(18), vertical = Rpx.dp(14)),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+    // 闹钟依赖的系统权限：逐条列出来，缺的可以一键跳设置页
+    val perms = state.alarmPermissions
+    val missing = perms.count { !it.ok }
+    SectionLabel("闹钟权限", topMargin = Rpx.dp(28))
+    Text(
+        text = "下面这些开关决定闹钟能不能准点响、能不能亮屏弹出响铃页",
+        fontSize = Rpx.sp(22),
+        color = C.hint,
+        lineHeight = Rpx.sp(32),
+        modifier = Modifier.padding(top = Rpx.dp(8))
+    )
+    Text(
+        text = if (missing == 0) "全部已开启，闹钟可以正常响" else "还有 " + missing + " 项没开启",
+        fontSize = Rpx.sp(22),
+        color = if (missing == 0) Color(0xFF43A047) else Color(0xFFE53935),
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = Rpx.dp(8))
+    )
+    perms.forEach { perm ->
+        AlarmPermissionRow(perm) { state.openAlarmPermission(perm.id) }
+    }
+}
+
+/** 一项闹钟权限：标题 + 说明 + 「已开启 / 去设置」 */
+@Composable
+private fun AlarmPermissionRow(perm: AlarmPermission, onOpen: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = Rpx.dp(12))
+            .clip(RoundedCornerShape(Rpx.dp(16)))
+            .background(Color(0x08000000))
+            .padding(horizontal = Rpx.dp(16), vertical = Rpx.dp(14)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
             Text(
-                text = warn,
-                fontSize = Rpx.sp(22),
-                color = Color(0xFFE53935),
-                lineHeight = Rpx.sp(32),
-                modifier = Modifier.weight(1f)
+                text = perm.title,
+                fontSize = Rpx.sp(24),
+                color = Color(0xFF333333),
+                fontWeight = FontWeight.Medium
             )
             Text(
-                text = "去开启",
-                fontSize = Rpx.sp(22),
-                color = Color(0xFFE53935),
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = Rpx.dp(10))
+                text = perm.desc,
+                fontSize = Rpx.sp(21),
+                color = C.hint,
+                lineHeight = Rpx.sp(30),
+                modifier = Modifier.padding(top = Rpx.dp(4))
             )
+        }
+        if (perm.ok) {
+            Text(
+                text = "已开启",
+                fontSize = Rpx.sp(22),
+                color = Color(0xFF43A047),
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(start = Rpx.dp(12))
+            )
+        } else {
+            Box(
+                Modifier
+                    .padding(start = Rpx.dp(12))
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(C.blue)
+                    .clickable { onOpen() }
+                    .padding(horizontal = Rpx.dp(18), vertical = Rpx.dp(9))
+            ) {
+                Text("去设置", fontSize = Rpx.sp(22), color = Color.White)
+            }
         }
     }
 }
