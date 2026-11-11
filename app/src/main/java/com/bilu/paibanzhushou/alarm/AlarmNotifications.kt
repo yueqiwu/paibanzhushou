@@ -12,6 +12,7 @@ import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
 import android.os.Process
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.bilu.paibanzhushou.MainActivity
@@ -98,6 +99,15 @@ object AlarmNotifications {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
+    /**
+     * 是否有「后台弹出界面」权限（SYSTEM_ALERT_WINDOW）。
+     *
+     * 有它才会被 Android 视为「可以后台启动 Activity」的例外，锁屏/后台时才能真正弹出响铃页；
+     * 没有的话 startActivity 会被系统以 BAL_BLOCK 拒掉（铃声仍由前台服务播放，不受影响）。
+     */
+    fun canDrawOverlays(context: Context): Boolean =
+        runCatching { Settings.canDrawOverlays(context) }.getOrDefault(false)
+
     fun showRinging(context: Context, date: String, ban: String) {
         if (!canPost(context)) return
         ensureChannel(context)
@@ -108,14 +118,15 @@ object AlarmNotifications {
             context, requestCode(date, ban, 0), fire,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val dismissPi = PendingIntent.getActivity(
+        // 关闭/稍后都走 Service：手表或通知栏点一下就能直接停铃，不会闪一下界面
+        val dismissPi = PendingIntent.getService(
             context, requestCode(date, ban, 1),
-            AlarmRingActivity.intent(context, date, ban, AlarmRingActivity.ACTION_DISMISS),
+            ringCommand(context, AlarmRingService.ACTION_DISMISS, date, ban),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val snoozePi = PendingIntent.getActivity(
+        val snoozePi = PendingIntent.getService(
             context, requestCode(date, ban, 2),
-            AlarmRingActivity.intent(context, date, ban, AlarmRingActivity.ACTION_SNOOZE),
+            ringCommand(context, AlarmRingService.ACTION_SNOOZE, date, ban),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val openApp = PendingIntent.getActivity(
@@ -140,10 +151,25 @@ object AlarmNotifications {
             .setOnlyAlertOnce(false)
             .setContentIntent(fullPi)
             .setFullScreenIntent(fullPi, true)
-            .setDeleteIntent(openApp)
+            // 划掉通知（手表上也是同样的动作）就等于关闭闹钟
+            .setDeleteIntent(dismissPi)
             .addAction(0, "关闭闹钟", dismissPi)
             .addAction(0, "5 分钟后提醒", snoozePi)
+            // 手表（Wear OS 及多数蓝牙手表的通知同步）优先读 WearableExtender 里的动作
+            .extend(
+                NotificationCompat.WearableExtender()
+                    .addAction(NotificationCompat.Action(0, "关闭闹钟", dismissPi))
+                    .addAction(NotificationCompat.Action(0, "5 分钟后提醒", snoozePi))
+            )
         runCatching { nm.notify(notificationId(date, ban), builder.build()) }
+    }
+
+    private fun ringCommand(context: Context, action: String, date: String, ban: String): android.content.Intent {
+        return android.content.Intent(context, AlarmRingService::class.java).apply {
+            this.action = action
+            putExtra(ShiftAlarm.EXTRA_DATE, date)
+            putExtra(ShiftAlarm.EXTRA_BAN, ban)
+        }
     }
 
     fun cancel(context: Context, date: String, ban: String) {

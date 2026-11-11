@@ -747,6 +747,11 @@ class IndexState(
             requestExactAlarmPermission()
             return
         }
+        // 没有「后台弹出界面」时，后台/锁屏拉起响铃页会被系统拦掉（铃声照响，只是不弹页面）
+        if (!com.bilu.paibanzhushou.alarm.AlarmNotifications.canDrawOverlays(context)) {
+            toast("请打开「后台弹出界面」，否则锁屏时不会弹出响铃页")
+            requestOverlayPermission()
+        }
         // Android 14+：没有「全屏通知」权限时，闹钟到点只能弹通知、不会亮屏响铃
         if (!com.bilu.paibanzhushou.alarm.AlarmNotifications.canUseFullScreen(context)) {
             toast("请允许「全屏通知」，否则闹钟可能只弹通知")
@@ -772,6 +777,14 @@ class IndexState(
             .onFailure { runCatching { context.startActivity(fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
 
+    /** 跳系统「后台弹出界面 / 显示在其他应用上层」开关页 */
+    private fun requestOverlayPermission() {
+        val direct = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.packageName))
+        val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
+        runCatching { context.startActivity(direct.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { runCatching { context.startActivity(fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+    }
+
     /** 跳系统「全屏通知」开关页（Android 14+ 才有） */
     private fun requestFullScreenPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return
@@ -792,6 +805,8 @@ class IndexState(
         alarmWarn = when {
             !alarmConfig.enabled -> null
             !AlarmNotifications.canPost(context) -> "缺少通知权限，闹钟到点不会响"
+            !AlarmNotifications.canDrawOverlays(context) ->
+                "没开「后台弹出界面」，锁屏或后台时不会弹出响铃页（铃声不受影响）"
             !AlarmNotifications.canUseFullScreen(context) -> "没开「全屏通知」，锁屏或后台时闹钟只会弹一条通知"
             else -> null
         }
@@ -802,10 +817,18 @@ class IndexState(
         val fsi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:" + context.packageName))
         } else null
+        val overlay = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:" + context.packageName)
+        )
         val notif = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
             .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         val app = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
-        val attempts = if (AlarmNotifications.canUseFullScreen(context)) listOf(notif, app) else listOfNotNull(fsi, notif, app)
+        val attempts = when {
+            !AlarmNotifications.canDrawOverlays(context) -> listOfNotNull(overlay, fsi, notif, app)
+            AlarmNotifications.canUseFullScreen(context) -> listOf(notif, app)
+            else -> listOfNotNull(fsi, notif, app)
+        }
         for (i in attempts) {
             val ok = runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
             if (ok) return

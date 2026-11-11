@@ -80,7 +80,25 @@ class AlarmRingActivity : ComponentActivity() {
             }
         }
 
+        showScreen()
+    }
+
+    private fun showScreen() {
         setContent {
+            // 服务一停（按电源键 / 通知里关闭 / 5 分钟超时），本页自动关掉，不会停在响铃页
+            LaunchedEffect(Unit) {
+                val startedAt = System.currentTimeMillis()
+                var seenActive = false
+                while (true) {
+                    delay(500)
+                    if (AlarmRingService.active) {
+                        seenActive = true
+                    } else if (seenActive || System.currentTimeMillis() - startedAt > 8000L) {
+                        finish()
+                        break
+                    }
+                }
+            }
             AlarmRingScreen(
                 date = dateText,
                 ban = banText,
@@ -88,6 +106,11 @@ class AlarmRingActivity : ComponentActivity() {
                 onSnooze = { snoozeAndFinish() }
             )
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AlarmRingService.pageShown = true
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -98,14 +121,7 @@ class AlarmRingActivity : ComponentActivity() {
             ACTION_SNOOZE -> snoozeAndFinish()
             else -> {
                 handleIntent(intent)
-                setContent {
-                    AlarmRingScreen(
-                        date = dateText,
-                        ban = banText,
-                        onDismiss = { dismissAll() },
-                        onSnooze = { snoozeAndFinish() }
-                    )
-                }
+                showScreen()
             }
         }
     }

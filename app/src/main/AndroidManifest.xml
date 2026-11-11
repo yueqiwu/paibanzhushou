@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- 「后台弹出界面」：有它才能从后台/锁屏直接拉起响铃页（没有时 startActivity 被 BAL_BLOCK 拒掉）。
+         不上架应用商店，所以可以声明；用户需在系统设置里手动授予。 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 常驻前台服务：ColorOS 会延后「后台闲置」应用的精确闹钟，前台服务保持应用活跃 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
