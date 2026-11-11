@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">班表小历</string>
     <string name="member_table_title">同事排班表</string>
-    <string name="widget_desc">2:1 卡片，今天起 7 天的班次</string>
+    <string name="widget_desc">4×2 大卡，今天起 7 天的班次（2:1 比例）</string>
 
     <!-- 微信开放平台「移动应用」AppID（wx 开头），非小程序 AppID -->
     <string name="wx_app_id" translatable="false">wxcac48d6e659ad7d7</string>
@@ -14,4 +14,5 @@
          用于「明文 URL Scheme」：weixin://dl/business/?appid=…&path=…，不需要开放平台认证/关联。
          需要小程序后台先打开：账号设置-基本设置-隐私与安全-明文Scheme拉起此小程序。 -->
     <string name="wx_miniprogram_appid" translatable="false">wx0000000000000000</string>
+    <string name="widget_desc_compact">2×1 小卡，7 个日号圆圈看今天起一周</string>
 </resources>

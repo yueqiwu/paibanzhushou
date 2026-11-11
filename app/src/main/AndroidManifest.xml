@@ -42,6 +42,17 @@
 
         <!-- 桌面小组件：今天起 7 天的排班 -->
         <receiver
+            android:name=".widget.ScheduleCompactWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.bilu.paibanzhushou.action.WIDGET_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_compact" />
+        </receiver>
+        <receiver
             android:name=".widget.ScheduleWidgetProvider"
             android:exported="true">
             <intent-filter>
