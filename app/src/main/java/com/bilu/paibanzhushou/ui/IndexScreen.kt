@@ -123,8 +123,10 @@ fun IndexScreen(
                 .verticalScroll(scrollState, enabled = !dragging)
                 .imePadding()
         ) {
-            // 源版 APP 分支：<view class="header-block" style="padding-top:100rpx;">（从页面顶部起算，含状态栏）
-            Spacer(Modifier.height(Rpx.dp(100)))
+            // 源版从页面顶部留 100rpx（含状态栏）；这里改成「状态栏高度 + 8rpx」，把省下来的
+            // 竖屏空间让给日历，让首页不滚动也能看到完整月历
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            Spacer(Modifier.height(Rpx.dp(8)))
 
             HeroCard(state)
             ConfigCard(
@@ -235,10 +237,10 @@ private fun HeroCard(state: IndexState) {
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(26)),
-        radius = Rpx.dp(28),
+            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(16)),
+        radius = Rpx.dp(24),
         bgAlpha = 0.62f,
-        contentPadding = PaddingValues(horizontal = Rpx.dp(28), vertical = Rpx.dp(24))
+        contentPadding = PaddingValues(horizontal = Rpx.dp(24), vertical = Rpx.dp(14))
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -246,9 +248,9 @@ private fun HeroCard(state: IndexState) {
         ) {
         Box(
             Modifier
-                .size(Rpx.dp(88))
-                .background(Brush.linearGradient(listOf(C.green, C.blue)), RoundedCornerShape(Rpx.dp(26)))
-                .padding(Rpx.dp(6)),
+                .size(Rpx.dp(64))
+                .background(Brush.linearGradient(listOf(C.green, C.blue)), RoundedCornerShape(Rpx.dp(20)))
+                .padding(Rpx.dp(5)),
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -256,23 +258,25 @@ private fun HeroCard(state: IndexState) {
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(Rpx.dp(20))),
+                    .clip(RoundedCornerShape(Rpx.dp(15))),
                 contentScale = ContentScale.Crop
             )
         }
         Column(Modifier.padding(start = Rpx.dp(18))) {
             Text(
                 text = "班表小历",
-                fontSize = Rpx.sp(34),
+                fontSize = Rpx.sp(30),
                 fontWeight = FontWeight.Bold,
                 color = C.textPrimary,
-                letterSpacing = Rpx.sp(1)
+                letterSpacing = Rpx.sp(1),
+                lineHeight = Rpx.sp(34)
             )
             Text(
                 text = state.heroSubtitle,
-                fontSize = Rpx.sp(24),
+                fontSize = Rpx.sp(22),
                 color = C.textSub,
-                modifier = Modifier.padding(top = Rpx.dp(6))
+                lineHeight = Rpx.sp(26),
+                modifier = Modifier.padding(top = Rpx.dp(2))
             )
         }
         }
@@ -293,14 +297,14 @@ private fun ConfigCard(
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(18)),
-        radius = Rpx.dp(28),
+            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(12)),
+        radius = Rpx.dp(24),
         bgAlpha = 0.62f,
         contentPadding = PaddingValues(
-            start = Rpx.dp(24),
-            end = Rpx.dp(24),
-            top = Rpx.dp(22),
-            bottom = Rpx.dp(20)
+            start = Rpx.dp(22),
+            end = Rpx.dp(22),
+            top = Rpx.dp(16),
+            bottom = Rpx.dp(14)
         )
     ) {
         // header
@@ -377,7 +381,7 @@ private fun PeopleTabs(state: IndexState) {
         Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(top = Rpx.dp(14)),
+            .padding(top = Rpx.dp(10)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         state.people.forEachIndexed { index, person ->
@@ -1039,7 +1043,7 @@ private fun CopyrightFooter(state: IndexState) {
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(36), bottom = Rpx.dp(20)),
+            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(18), bottom = Rpx.dp(14)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         UpdateSection(state)

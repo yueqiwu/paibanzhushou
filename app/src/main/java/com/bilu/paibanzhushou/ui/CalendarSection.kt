@@ -13,6 +13,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -80,7 +81,7 @@ private val WEEK_NAMES = listOf("日", "一", "二", "三", "四", "五", "六")
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CalendarSection(state: IndexState, onOpenMemberTable: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(26))) {
+    Column(Modifier.fillMaxWidth().padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(16))) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -100,15 +101,20 @@ fun CalendarSection(state: IndexState, onOpenMemberTable: () -> Unit) {
         }
         Text(
             text = state.rangeText,
-            fontSize = Rpx.sp(24),
+            fontSize = Rpx.sp(22),
             color = Color(0x940B1020),
-            modifier = Modifier.padding(top = Rpx.dp(8))
+            lineHeight = Rpx.sp(26),
+            modifier = Modifier.padding(top = Rpx.dp(2))
         )
-        // 图例
-        FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(top = Rpx.dp(16)),
-            horizontalArrangement = Arrangement.spacedBy(Rpx.dp(12)),
-            verticalArrangement = Arrangement.spacedBy(Rpx.dp(12))
+        // 图例：横向排成一行（可左右滑）。原来用 FlowRow 会自动换行，占掉两行高度，
+        // 首页想「不滚动看完整月历」这点空间很关键；单行横滑与源版视觉一致、操作也自然。
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = Rpx.dp(8))
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(Rpx.dp(7)),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             state.banOptions.forEach { ban ->
                 LegendDotItem(name = ban, color = hexColor(state.banColor(ban)))
@@ -121,10 +127,10 @@ fun CalendarSection(state: IndexState, onOpenMemberTable: () -> Unit) {
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(16)),
-        radius = Rpx.dp(28),
+            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(10)),
+        radius = Rpx.dp(24),
         bgAlpha = 0.66f,
-        contentPadding = PaddingValues(Rpx.dp(12))
+        contentPadding = PaddingValues(Rpx.dp(8))
     ) {
         CalendarGrid(state)
     }
@@ -139,10 +145,10 @@ private fun LegendPill(content: @Composable RowScope.() -> Unit) {
     Row(
         // 内容行高 34rpx + 上下 padding 6rpx，两款胶囊高度完全一致
         Modifier
-            .height(Rpx.dp(46))
+            .height(Rpx.dp(34))
             .background(Color(0xB3FFFFFF), RoundedCornerShape(999.dp))
             .border(Rpx.dp(1), Color(0x0A000000), RoundedCornerShape(999.dp))
-            .padding(horizontal = Rpx.dp(16)),
+            .padding(horizontal = Rpx.dp(10)),
         verticalAlignment = Alignment.CenterVertically,
         content = content
     )
@@ -153,10 +159,10 @@ private fun LegendDotItem(name: String, color: Color) {
     LegendPill {
         Box(
             Modifier
-                .size(Rpx.dp(16))
+                .size(Rpx.dp(12))
                 .background(color, CircleShape)
         )
-        Spacer(Modifier.width(Rpx.dp(8)))
+        Spacer(Modifier.width(Rpx.dp(5)))
         LegendText(name)
     }
 }
@@ -166,20 +172,20 @@ private fun LegendTagItem(tag: String, tagColor: Color, name: String) {
     LegendPill {
         Box(
             Modifier
-                .height(Rpx.dp(30))
-                .background(tagColor, RoundedCornerShape(Rpx.dp(8)))
-                .padding(horizontal = Rpx.dp(10)),
+                .height(Rpx.dp(24))
+                .background(tagColor, RoundedCornerShape(Rpx.dp(6)))
+                .padding(horizontal = Rpx.dp(7)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = tag,
-                fontSize = Rpx.sp(20),
-                lineHeight = Rpx.sp(20),
+                fontSize = Rpx.sp(19),
+                lineHeight = Rpx.sp(19),
                 color = Color.White,
                 textAlign = TextAlign.Center
             )
         }
-        Spacer(Modifier.width(Rpx.dp(8)))
+        Spacer(Modifier.width(Rpx.dp(6)))
         LegendText(name)
     }
 }
@@ -188,9 +194,9 @@ private fun LegendTagItem(tag: String, tagColor: Color, name: String) {
 private fun LegendText(name: String) {
     Text(
         text = name,
-        fontSize = Rpx.sp(24),
-        // 显式行高，避免 Material 默认行高（24sp）撑高胶囊导致「假 / 班」胶囊与色点胶囊不齐
-        lineHeight = Rpx.sp(34),
+        fontSize = Rpx.sp(21),
+        // 显式行高，避免 Material 默认行高撑高胶囊导致「假 / 班」胶囊与色点胶囊不齐
+        lineHeight = Rpx.sp(24),
         color = Color(0xB80B1020)
     )
 }
@@ -199,7 +205,7 @@ private fun LegendText(name: String) {
  * 月历本体，对应 uni_modules/wu-calendar。
  */
 /** 日历一行高度（源 wu-calendar itemHeight = 70px，1:1 用 dp） */
-private val CAL_ROW_HEIGHT = 70.dp
+private val CAL_ROW_HEIGHT = 56.dp
 
 /** 虚拟无限 Pager：中间页 + 总页数（页索引保持在数千量级，避免超长偏移的精度问题） */
 private const val PAGER_MIDDLE = 6000
@@ -230,7 +236,7 @@ private fun CalendarGrid(state: IndexState) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(Rpx.dp(40))
+                .height(Rpx.dp(34))
                 .clickable { state.toggleFold() },
             contentAlignment = Alignment.Center
         ) {
@@ -310,14 +316,14 @@ private fun CalendarPager(
 
     Column(Modifier.fillMaxWidth()) {
         // 头部
-        Box(Modifier.fillMaxWidth().height(Rpx.dp(100))) {
+        Box(Modifier.fillMaxWidth().height(Rpx.dp(76))) {
             Row(
                 Modifier.fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
                 Box(
-                    Modifier.width(Rpx.dp(100)).height(Rpx.dp(100)).clickable {
+                    Modifier.width(Rpx.dp(90)).height(Rpx.dp(76)).clickable {
                         scope.launch {
                             pagerState.animateScrollToPage(pagerState.currentPage - 1, animationSpec = tween(300))
                         }
@@ -329,7 +335,7 @@ private fun CalendarPager(
                 Box(
                     Modifier
                         .width(Rpx.dp(200))
-                        .height(Rpx.dp(100))
+                        .height(Rpx.dp(76))
                         .clickable { onOpenMonthPicker() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -341,7 +347,7 @@ private fun CalendarPager(
                     )
                 }
                 Box(
-                    Modifier.width(Rpx.dp(100)).height(Rpx.dp(100)).clickable {
+                    Modifier.width(Rpx.dp(90)).height(Rpx.dp(76)).clickable {
                         scope.launch {
                             pagerState.animateScrollToPage(pagerState.currentPage + 1, animationSpec = tween(300))
                         }
@@ -379,7 +385,7 @@ private fun CalendarPager(
         Row(Modifier.fillMaxWidth().padding(horizontal = Rpx.dp(8))) {
             WEEK_NAMES.forEach { name ->
                 Box(
-                    Modifier.weight(1f).height(Rpx.dp(90)),
+                    Modifier.weight(1f).height(Rpx.dp(62)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(name, fontSize = Rpx.sp(28), color = Color(0xFF333333))
@@ -529,7 +535,7 @@ private fun CalendarCell(
     onClick: () -> Unit
 ) {
     // 源样式：外框高 itemHeight(70px)，内框高 itemHeight - defaultMargin(8px)，上下各留 4px
-    val boxHeight = 70.dp - Rpx.dp(8)
+    val boxHeight = CAL_ROW_HEIGHT - Rpx.dp(8)
     val blockShape = RoundedCornerShape(Rpx.dp(12))
     val tagShape = RoundedCornerShape(Rpx.dp(8))
 
