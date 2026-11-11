@@ -204,8 +204,17 @@ private fun LegendText(name: String) {
 /**
  * 月历本体，对应 uni_modules/wu-calendar。
  */
-/** 日历一行高度（源 wu-calendar itemHeight = 70px，1:1 用 dp） */
-private val CAL_ROW_HEIGHT = 56.dp
+/**
+ * 日历一行高度：源 wu-calendar itemHeight = 70px（1:1 用 dp）。
+ * 首屏要塞下整月（6 行）+ 页脚，所以在矮屏上用 56dp 左右；屏幕越高越把富余高度还给日历，
+ * 免得底部留一大块空白。
+ */
+@Composable
+private fun calendarRowHeight(): Dp {
+    val screenH = LocalConfiguration.current.screenHeightDp
+    // 800dp 高的屏约 70dp/行（与源 itemHeight 一致），更矮的屏自动收紧，保证整月 + 页脚一屏放下
+    return (screenH * 0.0800f).coerceIn(54f, 66f).dp
+}
 
 /** 虚拟无限 Pager：中间页 + 总页数（页索引保持在数千量级，避免超长偏移的精度问题） */
 private const val PAGER_MIDDLE = 6000
@@ -215,7 +224,8 @@ private const val PAGER_COUNT = 12001
 private fun CalendarGrid(state: IndexState) {
     var showMonthPicker by remember { mutableStateOf(false) }
     val monthFirst = state.calendarMonthMs
-    val targetHeight = if (state.foldOpen) CAL_ROW_HEIGHT * 6 else CAL_ROW_HEIGHT
+    val rowHeight = calendarRowHeight()
+    val targetHeight = if (state.foldOpen) rowHeight * 6 else rowHeight
     val containerHeight by animateDpAsState(
         targetValue = targetHeight,
         animationSpec = tween(200, easing = LinearEasing),
@@ -419,6 +429,7 @@ private fun CalendarPager(
                 val entries = remember(pageMonth, state.scheduleVersion) {
                     state.windowedSelected(pageMonth)
                 }
+                val rowHeight = calendarRowHeight()
                 // 高亮只画在「选中日归属」的那一页：相邻月网格里恰好带上选中日时不出现幽灵选中
                 val selectedOnPage = if (expandMonth) {
                     pageMonth == Dates.firstOfMonth(selectedMs)
@@ -450,7 +461,8 @@ private fun CalendarPager(
                                         isToday = cell.dateStr == todayStr,
                                         selected = selectedOnPage && cell.dateStr == selectedStr,
                                         entry = entries[cell.dateStr],
-                                        modifier = Modifier.weight(1f).height(CAL_ROW_HEIGHT),
+                                        rowHeight = rowHeight,
+                                        modifier = Modifier.weight(1f).height(rowHeight),
                                         onClick = { state.onCellTap(cell.dateStr) }
                                     )
                                 }
@@ -531,11 +543,12 @@ private fun CalendarCell(
     isToday: Boolean,
     selected: Boolean,
     entry: SelectedEntry?,
+    rowHeight: Dp,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     // 源样式：外框高 itemHeight(70px)，内框高 itemHeight - defaultMargin(8px)，上下各留 4px
-    val boxHeight = CAL_ROW_HEIGHT - Rpx.dp(8)
+    val boxHeight = rowHeight - Rpx.dp(8)
     val blockShape = RoundedCornerShape(Rpx.dp(12))
     val tagShape = RoundedCornerShape(Rpx.dp(8))
 
