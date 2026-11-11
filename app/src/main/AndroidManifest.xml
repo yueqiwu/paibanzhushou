@@ -164,6 +164,6 @@
             android:launchMode="singleTask"
             android:taskAffinity="com.bilu.paibanzhushou"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-    </application>
+</application>
 
 </manifest>

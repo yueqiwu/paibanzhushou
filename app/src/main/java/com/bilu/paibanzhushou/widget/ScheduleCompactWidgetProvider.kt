@@ -16,7 +16,7 @@ import com.bilu.paibanzhushou.core.BanColors
  * 桌面小组件（小号）：2×1 卡片，一行标题 + 7 个日号圆圈。
  *
  * 与 4×2 大卡（[ScheduleWidgetProvider]）相比，这里把「星期 + 日号 + 班次文字」
- * 压成一个圆圈：圆内是日号、圆底是当天的班次色，今天额外套一圈深色描边。
+ * 压成一个圆圈：圆内是日号、圆底是当天的班次色，今天额外套一圈柔和蓝色光晕。
  * 这样 2×1 的窄条也能一眼看完「今天起 7 天上什么班」。
  *
  * 班次色块同样用预置 drawable（RemoteViews 的 setBackgroundColor 会抹掉圆形，
@@ -34,9 +34,17 @@ class ScheduleCompactWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        private val CELL_IDS = intArrayOf(
+            R.id.c_cell0, R.id.c_cell1, R.id.c_cell2, R.id.c_cell3,
+            R.id.c_cell4, R.id.c_cell5, R.id.c_cell6, R.id.c_cell7
+        )
         private val DATE_IDS = intArrayOf(
             R.id.c_date0, R.id.c_date1, R.id.c_date2, R.id.c_date3,
-            R.id.c_date4, R.id.c_date5, R.id.c_date6
+            R.id.c_date4, R.id.c_date5, R.id.c_date6, R.id.c_date7
+        )
+        private val BAN_IDS = intArrayOf(
+            R.id.c_ban0, R.id.c_ban1, R.id.c_ban2, R.id.c_ban3,
+            R.id.c_ban4, R.id.c_ban5, R.id.c_ban6, R.id.c_ban7
         )
 
         /** 班次配色 → 预置圆形 drawable */
@@ -113,10 +121,14 @@ class ScheduleCompactWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.c_month, week?.monthLabel.orEmpty())
             views.setTextViewText(R.id.c_person, week?.personName.orEmpty())
 
-            for (i in 0..6) {
+            for (i in 0..7) {
                 val day = week?.days?.getOrNull(i)
-                views.setTextViewText(DATE_IDS[i], day?.dayOfMonth?.toString().orEmpty())
-                val ban = day?.ban.orEmpty()
+                // 第 8 格留空但保持 INVISIBLE（不能用 GONE，否则第 2 行的 3 格会按 1/3 均分、和上一行错位）
+                views.setViewVisibility(CELL_IDS[i], if (day == null) android.view.View.INVISIBLE else android.view.View.VISIBLE)
+                if (day == null) continue
+                views.setTextViewText(DATE_IDS[i], day.dayOfMonth.toString())
+                views.setTextViewText(BAN_IDS[i], day.ban)
+                val ban = day.ban
                 val hex = if (ban.isBlank()) "" else hexOf(ban)
                 val bg = if (hex.isBlank()) {
                     R.drawable.circle_none
@@ -125,8 +137,16 @@ class ScheduleCompactWidgetProvider : AppWidgetProvider() {
                 } else {
                     CIRCLES[hex] ?: R.drawable.circle_none
                 }
+                // 文字色只作用于日号；班次名固定深灰，浅色圆底上也能看清
+                
                 views.setInt(DATE_IDS[i], "setBackgroundResource", bg)
                 views.setTextColor(DATE_IDS[i], textColor(hex))
+                // 今天：班次名用主题蓝，替代以前的黑描边
+                views.setTextColor(
+                    BAN_IDS[i],
+                    if (i == 0) android.graphics.Color.parseColor("#2F6FB5")
+                    else android.graphics.Color.parseColor("#41505F")
+                )
             }
 
             val pi = PendingIntent.getActivity(
