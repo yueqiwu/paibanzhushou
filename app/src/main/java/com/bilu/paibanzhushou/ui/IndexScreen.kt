@@ -1040,26 +1040,40 @@ private fun AlarmPermissionRow(perm: AlarmPermission, onOpen: () -> Unit) {
 
 @Composable
 private fun CopyrightFooter(state: IndexState) {
+    // 版权与版本合成一行，省掉原先三行文字占的高度（开屏要看完整月历）
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(18), bottom = Rpx.dp(14)),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(10), bottom = Rpx.dp(8))
     ) {
         UpdateSection(state)
-        Text(
-            text = "该软件仅供个人使用，请勿商用。",
-            fontSize = Rpx.sp(22),
-            color = Color(0x610B1020),
-            lineHeight = Rpx.sp(38)
-        )
-        Text(
-            text = "Copyright © 2026 WYQ 版权所有。",
-            fontSize = Rpx.sp(22),
-            color = Color(0x610B1020),
-            lineHeight = Rpx.sp(38),
-            modifier = Modifier.padding(top = Rpx.dp(6))
-        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = Rpx.dp(6)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "仅供个人使用 · © 2026 WYQ",
+                fontSize = Rpx.sp(19),
+                color = Color(0x590B1020),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Text(
+                text = "v" + state.currentVersion() + " · " + if (state.updateChecking) "检查中…" else "检查更新",
+                fontSize = Rpx.sp(19),
+                color = Color(0xCC4A90E2),
+                maxLines = 1,
+                modifier = Modifier
+                    .padding(start = Rpx.dp(12))
+                    .clip(RoundedCornerShape(Rpx.dp(8)))
+                    .clickable { state.checkUpdate(silent = false) }
+                    .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
+            )
+        }
     }
 }
 
@@ -1082,22 +1096,7 @@ private fun UpdateSection(state: IndexState) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (info == null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "当前版本 " + state.currentVersion(),
-                    fontSize = Rpx.sp(22),
-                    color = Color(0x610B1020)
-                )
-                Text(
-                    text = " · " + if (state.updateChecking) "正在检查…" else "检查更新",
-                    fontSize = Rpx.sp(22),
-                    color = Color(0xFF4A90E2),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(Rpx.dp(8)))
-                        .clickable { state.checkUpdate(silent = false) }
-                        .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
-                )
-            }
+            // 无新版本时不占位，版本与「检查更新」在下方版权行里
         } else {
             Column(
                 Modifier
