@@ -31,8 +31,9 @@ android {
         // 1.0.9 修后台/锁屏不响：响铃改由前台服务直接放音（全屏页会被 BAL 拦掉），并检测「全屏通知」权限
         // 1.0.10 响铃时按电源键（屏幕状态切换）即停铃；通知动作改走 Service 并补 Wearable 动作，手表也能关
         // 1.0.11 设置页加「闹钟权限」清单：逐项显示通知/精确闹钟/后台弹出界面/全屏通知是否开启，缺的可一键跳系统设置
-        versionCode = 111
-        versionName = "1.0.11"
+        // 1.0.12 新增「闹钟铃声」：可选系统默认 / 静音（只震动）/ 任意系统闹钟铃声，带试听
+        versionCode = 112
+        versionName = "1.0.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

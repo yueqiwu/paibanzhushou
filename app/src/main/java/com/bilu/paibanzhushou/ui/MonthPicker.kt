@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,16 +30,20 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -400,6 +406,143 @@ private fun WheelColumn(
                     fontSize = Rpx.sp(32),
                     color = if (index == selectedIndex) Color(0xFF111111) else Color(0xFF9AA3B2)
                 )
+            }
+        }
+    }
+}
+
+/** 选闹铃音：底部浮层列出系统闹钟铃声，点一下试听，确定后保存。 */
+@Composable
+fun RingtonePickerSheet(
+    show: Boolean,
+    current: String?,
+    onDismiss: () -> Unit,
+    onPick: (String?) -> Unit
+) {
+    if (!show) return
+    val context = LocalContext.current
+    val options = remember(show) { com.bilu.paibanzhushou.data.AlarmRingtones.list(context) }
+    var draft by remember(show) { mutableStateOf(current) }
+    var preview by remember(show) { mutableStateOf<android.media.Ringtone?>(null) }
+
+    fun stopPreview() {
+        runCatching { preview?.stop() }
+        preview = null
+    }
+
+    fun play(value: String?) {
+        stopPreview()
+        if (value == null || value == com.bilu.paibanzhushou.data.AlarmConfig.RINGTONE_SILENT) return
+        runCatching {
+            val r = android.media.RingtoneManager.getRingtone(context, android.net.Uri.parse(value))
+            r?.audioAttributes = android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            r?.play()
+            preview = r
+        }
+    }
+
+    DisposableEffect(show) {
+        onDispose { runCatching { preview?.stop() } }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0x59112034))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    stopPreview()
+                    onDismiss()
+                }
+        )
+        Column(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(
+                    Color.White,
+                    RoundedCornerShape(topStart = Rpx.dp(28), topEnd = Rpx.dp(28))
+                )
+                .navigationBarsPadding()
+        ) {
+            Row(
+                Modifier.fillMaxWidth().height(Rpx.dp(88)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.weight(1f).fillMaxSize().clickable {
+                        stopPreview()
+                        onDismiss()
+                    },
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Text(
+                        "取消",
+                        fontSize = Rpx.sp(30),
+                        color = Color(0xFF333333),
+                        modifier = Modifier.padding(start = Rpx.dp(30))
+                    )
+                }
+                Text(
+                    "闹钟铃声",
+                    fontSize = Rpx.sp(30),
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF111111)
+                )
+                Box(
+                    Modifier.weight(1f).fillMaxSize().clickable {
+                        stopPreview()
+                        onPick(draft)
+                    },
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Text(
+                        "确定",
+                        fontSize = Rpx.sp(30),
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF007AFF),
+                        modifier = Modifier.padding(end = Rpx.dp(30))
+                    )
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(Rpx.dp(1)).background(Color(0xFFEBEBEB)))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .height(Rpx.dp(620))
+                    .verticalScroll(rememberScrollState())
+            ) {
+                options.forEach { opt ->
+                    val active = opt.value == draft
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                draft = opt.value
+                                play(opt.value)
+                            }
+                            .padding(horizontal = Rpx.dp(30), vertical = Rpx.dp(22)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = opt.title,
+                            fontSize = Rpx.sp(28),
+                            color = if (active) Color(0xFF007AFF) else Color(0xFF222222),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (active) {
+                            Text("✓", fontSize = Rpx.sp(30), color = Color(0xFF007AFF))
+                        }
+                    }
+                }
             }
         }
     }

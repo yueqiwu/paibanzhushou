@@ -748,6 +748,12 @@ class IndexState(
         if (alarmConfig.enabled) resyncAlarms()
     }
 
+    /** 闹铃音：null 跟随系统；AlarmConfig.RINGTONE_SILENT 只震动；其它为铃声 Uri。响铃时才读取，不用重写闹钟。 */
+    fun setAlarmRingtone(value: String?) {
+        alarmConfig = alarmConfig.copy(ringtone = value)
+        AlarmStore.save(alarmConfig)
+    }
+
     fun setAlarmEnabled(enabled: Boolean) {
         alarmConfig = alarmConfig.copy(enabled = enabled)
         AlarmStore.save(alarmConfig)

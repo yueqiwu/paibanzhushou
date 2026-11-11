@@ -107,6 +107,7 @@ fun IndexScreen(state: IndexState, onOpenMemberTable: () -> Unit) {
     val scrollState = rememberScrollState()
     var confettiOrigin by remember { mutableStateOf(Offset.Zero) }
     var showAlarmTime by remember { mutableStateOf(false) }
+    var showRingtone by remember { mutableStateOf(false) }
     val dragging = state.dragController.dragging
 
     Box(Modifier.fillMaxSize().background(C.pageBg)) {
@@ -125,7 +126,8 @@ fun IndexScreen(state: IndexState, onOpenMemberTable: () -> Unit) {
             ConfigCard(
                 state,
                 onConfettiOrigin = { confettiOrigin = it },
-                onPickAlarmTime = { showAlarmTime = true }
+                onPickAlarmTime = { showAlarmTime = true },
+                onPickRingtone = { showRingtone = true }
             )
             CalendarSection(state = state, onOpenMemberTable = onOpenMemberTable)
             CopyrightFooter()
@@ -143,6 +145,15 @@ fun IndexScreen(state: IndexState, onOpenMemberTable: () -> Unit) {
             onPick = { h, m ->
                 showAlarmTime = false
                 state.setAlarmTime(h, m)
+            }
+        )
+        RingtonePickerSheet(
+            show = showRingtone,
+            current = state.alarmConfig.ringtone,
+            onDismiss = { showRingtone = false },
+            onPick = { value ->
+                showRingtone = false
+                state.setAlarmRingtone(value)
             }
         )
         state.confirm?.let { c ->
@@ -270,7 +281,8 @@ private fun HeroCard(state: IndexState) {
 private fun ConfigCard(
     state: IndexState,
     onConfettiOrigin: (Offset) -> Unit,
-    onPickAlarmTime: () -> Unit
+    onPickAlarmTime: () -> Unit,
+    onPickRingtone: () -> Unit
 ) {
     GlassCard(
         modifier = Modifier
@@ -346,7 +358,7 @@ private fun ConfigCard(
             exit = shrinkVertically(tween(280)) + fadeOut(tween(200))
         ) {
             Column(Modifier.fillMaxWidth()) {
-                ConfigBody(state, onConfettiOrigin, onPickAlarmTime)
+                ConfigBody(state, onConfettiOrigin, onPickAlarmTime, onPickRingtone)
             }
         }
     }
@@ -444,7 +456,8 @@ private fun PeopleTabs(state: IndexState) {
 private fun ConfigBody(
     state: IndexState,
     onConfettiOrigin: (Offset) -> Unit,
-    onPickAlarmTime: () -> Unit
+    onPickAlarmTime: () -> Unit,
+    onPickRingtone: () -> Unit
 ) {
     val nameFocus = remember { FocusRequester() }
     var showAnchorPicker by remember { mutableStateOf(false) }
@@ -586,7 +599,7 @@ private fun ConfigBody(
             )
         }
 
-        AlarmSection(state, onPickAlarmTime)
+        AlarmSection(state, onPickAlarmTime, onPickRingtone)
 
         // 保存并生成
         Row(
@@ -769,7 +782,11 @@ private fun RestSettingRow(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AlarmSection(state: IndexState, onPickAlarmTime: () -> Unit) {
+private fun AlarmSection(
+    state: IndexState,
+    onPickAlarmTime: () -> Unit,
+    onPickRingtone: () -> Unit
+) {
     val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -837,6 +854,35 @@ private fun AlarmSection(state: IndexState, onPickAlarmTime: () -> Unit) {
                     state.alarmConfig.timeText,
                     fontSize = Rpx.sp(26),
                     color = Color(0xFF111111)
+                )
+            }
+        }
+    }
+
+    Row(
+        Modifier.fillMaxWidth().padding(top = Rpx.dp(18)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("闹钟铃声", fontSize = Rpx.sp(26), color = C.textLabel)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            Box(
+                Modifier
+                    .background(C.fieldBg, RoundedCornerShape(Rpx.dp(16)))
+                    .border(Rpx.dp(1), Color(0x0A000000), RoundedCornerShape(Rpx.dp(16)))
+                    .clickable { onPickRingtone() }
+                    .padding(horizontal = Rpx.dp(20))
+                    .height(Rpx.dp(64)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = com.bilu.paibanzhushou.data.AlarmRingtones.label(
+                        context,
+                        state.alarmConfig.ringtone
+                    ),
+                    fontSize = Rpx.sp(24),
+                    color = Color(0xFF111111),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

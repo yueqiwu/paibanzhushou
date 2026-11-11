@@ -204,8 +204,19 @@ class AlarmRingService : Service() {
     private fun startRinging() {
         if (player != null) return
         runCatching {
-            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            // 设置里选过铃声就用选的；选了「静音」则只震动；没选过跟随系统默认闹钟铃声
+            val chosen = com.bilu.paibanzhushou.data.AlarmStore.load().ringtone
+            val uri: android.net.Uri? = when (chosen) {
+                com.bilu.paibanzhushou.data.AlarmConfig.RINGTONE_SILENT -> null
+                null, "" -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                else -> runCatching { android.net.Uri.parse(chosen) }.getOrNull()
+            }
+            if (uri == null) {
+                Log.i(TAG, "ringtone=silent, vibrate only")
+                startVibrating()
+                return
+            }
             val attrs = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
