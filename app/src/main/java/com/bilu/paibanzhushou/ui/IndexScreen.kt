@@ -305,6 +305,24 @@ private fun ConfigCard(
             } else {
                 Spacer(Modifier.weight(1f))
             }
+            // 收起状态下也能看到「缺 N 项权限」，点一下直接跳到缺的那个系统设置页
+            val missing = state.alarmPermissions.filter { !it.ok }
+            if (missing.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .padding(end = Rpx.dp(12))
+                        .background(Color(0x14E53935), RoundedCornerShape(999.dp))
+                        .border(Rpx.dp(1), Color(0x40E53935), RoundedCornerShape(999.dp))
+                        .clickable { state.openAlarmPermission(missing.first().id) }
+                        .padding(horizontal = Rpx.dp(14), vertical = Rpx.dp(6))
+                ) {
+                    Text(
+                        text = "缺 " + missing.size + " 项权限",
+                        fontSize = Rpx.sp(22),
+                        color = Color(0xFFE53935)
+                    )
+                }
+            }
             Box(
                 Modifier
                     .background(Color(0x144A90E2), RoundedCornerShape(999.dp))

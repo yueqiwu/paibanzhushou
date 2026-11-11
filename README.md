@@ -19,7 +19,7 @@
 | 官网（自有域名） | <https://qipaclub.top/paibanzhushou/>（宝塔站点 `c:/wwwroot/qipaclub.top/paibanzhushou`，APK 也在该目录，官网直链下载） |
 | 源码 | <https://github.com/yueqiwu/paibanzhushou> |
 | 版本 / Release | v1.0.11（versionCode 111，正式签名） |
-| 包校验 | SHA-256 `3C6728AF455671EE47C9FB0E8E0A1D52021E040149EE2CFC3128E21AD91D93FF` |
+| 包校验 | SHA-256 `B816D636928FBB9273102CEC1C4F23620CCA6AC9808E673CBF919B305F697903` |
 
 官网源码就是本仓库的 `docs/` 目录（纯静态 `index.html` + `style.css` + `img/`，全部相对路径），
 可直接整目录拷到任意静态站点的子路径下，例如 `qipaclub.top/paibanzhushou/`。
