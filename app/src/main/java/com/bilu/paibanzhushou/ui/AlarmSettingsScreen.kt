@@ -34,6 +34,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,8 +54,8 @@ import com.bilu.paibanzhushou.data.AlarmRingtones
  * 闹钟提醒设置页：把原先塞在首页「排班设置 → 展开」里的闹钟设置与权限整体搬到这里，
  * 顶部栏右侧的闹钟按钮进入；页面顶部可以选「为谁写闹钟」。
  *
- * 选人员 = 直接切首页当前人员（写闹钟的人就是首页正在看的人，避免两处状态打架），
- * 所以这里切人会和首页联动。
+ * 「为谁写闹钟」是闹钟自己的一份选择（存 [com.bilu.paibanzhushou.data.AlarmConfig.personId]），
+ * 和首页当前人员各管各的：在这里换人不会切首页的日历。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -64,7 +65,8 @@ fun AlarmSettingsScreen(
     onOpenAlarmList: () -> Unit
 ) {
     val context = LocalContext.current
-    var showAlarmTime by remember { mutableStateOf(false) }
+    // 正在改哪个班次的时间（null = 没打开时间浮层）
+    var showAlarmTimeFor by remember { mutableStateOf<String?>(null) }
     var showRingtone by remember { mutableStateOf(false) }
     val config = state.alarmConfig
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -121,7 +123,7 @@ fun AlarmSettingsScreen(
                 color = Color(0xFF111111)
             )
             Text(
-                text = "换人等于切首页当前人员，首页日历会跟着换",
+                text = "只决定给谁写闹钟，不影响首页当前人员",
                 fontSize = Rpx.sp(21),
                 color = C.hint,
                 lineHeight = Rpx.sp(30),
@@ -133,7 +135,7 @@ fun AlarmSettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(Rpx.dp(12))
             ) {
                 state.people.forEach { person ->
-                    val active = person.id == state.activePersonId
+                    val active = person.id == state.alarmPersonId
                     Row(
                         Modifier
                             .clip(RoundedCornerShape(999.dp))
@@ -143,7 +145,7 @@ fun AlarmSettingsScreen(
                                 if (active) Color(0x664A90E2) else Color(0x14000000),
                                 RoundedCornerShape(999.dp)
                             )
-                            .clickable { state.setActivePerson(person.id) }
+                            .clickable { state.setAlarmPerson(person.id) }
                             .padding(horizontal = Rpx.dp(22), vertical = Rpx.dp(10)),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -209,31 +211,50 @@ fun AlarmSettingsScreen(
                 }
             }
             Text(
-                text = "选中的班次会在当天按下面的时间响铃",
+                text = if (config.bans.isEmpty()) {
+                    "选中班次后，可以给每个班次单独设响铃时间"
+                } else {
+                    "每个班次各响各的，点右边的时间可以单独改"
+                },
                 fontSize = Rpx.sp(21),
                 color = C.hint,
                 lineHeight = Rpx.sp(30),
                 modifier = Modifier.padding(top = Rpx.dp(10))
             )
 
-            // 响铃时间
-            Row(
-                Modifier.fillMaxWidth().padding(top = Rpx.dp(18)),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("响铃时间", fontSize = Rpx.sp(26), color = C.textLabel)
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            // 每个班次各自的响铃时间（可多选班次，时间互不影响）
+            SectionLabel("响铃时间", topMargin = Rpx.dp(20))
+            config.bans.forEach { ban ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = Rpx.dp(12))
+                        .clip(RoundedCornerShape(Rpx.dp(14)))
+                        .clickable { showAlarmTimeFor = ban }
+                        .padding(start = Rpx.dp(4), end = Rpx.dp(2), top = Rpx.dp(2), bottom = Rpx.dp(2)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .size(Rpx.dp(16))
+                            .background(hexColor(state.banColor(ban)), CircleShape)
+                    )
+                    Text(
+                        text = ban,
+                        fontSize = Rpx.sp(26),
+                        color = C.textLabel,
+                        modifier = Modifier.padding(start = Rpx.dp(10)).weight(1f)
+                    )
                     Box(
                         Modifier
                             .background(C.fieldBg, RoundedCornerShape(Rpx.dp(16)))
                             .border(Rpx.dp(1), Color(0x0A000000), RoundedCornerShape(Rpx.dp(16)))
-                            .clickable { showAlarmTime = true }
                             .padding(horizontal = Rpx.dp(20))
-                            .height(Rpx.dp(64)),
+                            .height(Rpx.dp(60)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = config.timeText,
+                            text = config.timeTextOf(ban),
                             fontSize = Rpx.sp(26),
                             color = Color(0xFF111111)
                         )
@@ -380,16 +401,19 @@ fun AlarmSettingsScreen(
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
 
-    AlarmTimePickerSheet(
-        show = showAlarmTime,
-        hour = config.hour,
-        minute = config.minute,
-        onDismiss = { showAlarmTime = false },
-        onPick = { h, m ->
-            showAlarmTime = false
-            state.setAlarmTime(h, m)
-        }
-    )
+    val timeBan = showAlarmTimeFor
+    key(timeBan) {
+        AlarmTimePickerSheet(
+            show = timeBan != null,
+            hour = timeBan?.let { config.hourOf(it) } ?: config.hour,
+            minute = timeBan?.let { config.minuteOf(it) } ?: config.minute,
+            onDismiss = { showAlarmTimeFor = null },
+            onPick = { h, m ->
+                showAlarmTimeFor = null
+                if (timeBan != null) state.setAlarmTimeFor(timeBan, h, m)
+            }
+        )
+    }
     RingtonePickerSheet(
         show = showRingtone,
         current = config.ringtone,

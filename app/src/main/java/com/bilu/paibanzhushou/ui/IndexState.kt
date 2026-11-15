@@ -207,6 +207,10 @@ class IndexState(
             return if (idx < 0) 0 else idx
         }
 
+    /** 闹钟设置作用于哪个人员（独立于首页当前人员） */
+    val alarmPersonId: String
+        get() = alarmConfig.personId ?: activePersonId
+
     val todayShiftText: String
         get() = todayShift
 
@@ -288,6 +292,12 @@ class IndexState(
         val match = people.firstOrNull { it.id == savedActiveId }
         activePersonId = match?.id ?: people.firstOrNull()?.id ?: ""
         applyActivePersonToForm()
+        // 老数据（1.0.22 之前）没有「闹钟作用于哪个人员」，补一次成当前人员；
+        // 之后闹钟页再怎么选人都和首页当前人员各管各的。
+        if (alarmConfig.personId == null && activePersonId.isNotEmpty()) {
+            alarmConfig = alarmConfig.copy(personId = activePersonId)
+            AlarmStore.save(alarmConfig)
+        }
     }
 
     fun getActivePerson(): Person? = people.firstOrNull { it.id == activePersonId } ?: people.firstOrNull()
@@ -756,8 +766,11 @@ class IndexState(
         overrides = overrides.filterValues { it != ban }
         weekendRestBans = weekendRestBans.filter { it != ban }
         holidayRestBans = holidayRestBans.filter { it != ban }
-        if (alarmConfig.bans.contains(ban)) {
-            alarmConfig = alarmConfig.copy(bans = alarmConfig.bans.filter { it != ban })
+        if (alarmConfig.bans.contains(ban) || alarmConfig.times.containsKey(ban)) {
+            alarmConfig = alarmConfig.copy(
+                bans = alarmConfig.bans.filter { it != ban },
+                times = alarmConfig.times.filterKeys { it != ban }
+            )
             AlarmStore.save(alarmConfig)
         }
 
@@ -789,8 +802,19 @@ class IndexState(
         if (alarmConfig.enabled) resyncAlarms()
     }
 
-    fun setAlarmTime(hour: Int, minute: Int) {
-        alarmConfig = alarmConfig.copy(hour = hour.coerceIn(0, 23), minute = minute.coerceIn(0, 59))
+    /** 只改某个班次的响铃时间（各班次互不影响） */
+    fun setAlarmTimeFor(ban: String, hour: Int, minute: Int) {
+        if (ban.isEmpty()) return
+        val minutes = hour.coerceIn(0, 23) * 60 + minute.coerceIn(0, 59)
+        alarmConfig = alarmConfig.copy(times = alarmConfig.times + (ban to minutes))
+        AlarmStore.save(alarmConfig)
+        if (alarmConfig.enabled) resyncAlarms()
+    }
+
+    /** 换「闹钟作用于哪个人员」：只影响闹钟，不切首页当前人员 */
+    fun setAlarmPerson(id: String) {
+        if (id.isEmpty() || id == alarmConfig.personId) return
+        alarmConfig = alarmConfig.copy(personId = id)
         AlarmStore.save(alarmConfig)
         if (alarmConfig.enabled) resyncAlarms()
     }
@@ -993,7 +1017,7 @@ class IndexState(
 
     /** 按当前人员和设置重写系统闹钟；返回写入数量 */
     fun resyncAlarms(): Int {
-        val count = ShiftAlarm.sync(context, getActivePerson(), alarmConfig)
+        val count = ShiftAlarm.sync(context, ShiftAlarm.alarmPerson(alarmConfig), alarmConfig)
         alarmCount = count
         return count
     }

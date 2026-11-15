@@ -100,8 +100,14 @@ fun AlarmListScreen(state: IndexState, onBack: () -> Unit) {
                 color = C.textPrimary
             )
             Text(
-                text = "每天 " + pad2(config.hour) + ":" + pad2(config.minute) +
-                    " 响铃；取消某一天后，改排班、开机都不会把它加回来",
+                text = if (config.bans.size <= 1) {
+                    "每天 " + pad2(config.hour) + ":" + pad2(config.minute) +
+                        " 响铃；取消某一天后，改排班、开机都不会把它加回来"
+                } else {
+                    "各班次按自己的时间响铃：" +
+                        config.bans.joinToString("，") { it + " " + config.timeTextOf(it) } +
+                        "；取消某一天后，改排班、开机都不会把它加回来"
+                },
                 fontSize = Rpx.sp(21),
                 color = C.hint,
                 lineHeight = Rpx.sp(32),

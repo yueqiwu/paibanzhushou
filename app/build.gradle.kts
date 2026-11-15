@@ -44,8 +44,8 @@ android {
     //        切人加淡入位移动画；闹钟铃声改为跳系统设置；新增「勿扰 / 睡眠模式例外」权限项；更新内容完整显示 + 下载源测速
     // 1.0.22 切人动画只保留日历滑入（去掉上两栏淡入）；闹钟铃声恢复 App 内自选；删掉点进去也没开关的
     //        「勿扰 / 睡眠模式例外」权限项，改成文字说明；对比同事排班 / 闹钟设置页补上左右滑入的页面转场
-        versionCode = 122
-        versionName = "1.0.22"
+        versionCode = 123
+        versionName = "1.0.23"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

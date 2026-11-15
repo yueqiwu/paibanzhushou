@@ -524,15 +524,22 @@ private fun PeopleTabs(state: IndexState, swipe: PersonSwipeState, widthPx: Floa
     val progress = if (swipe.swiping && swipe.peekPerson != null) {
         (kotlin.math.abs(swipe.offset) / widthPx.coerceAtLeast(1f)).coerceIn(0f, 1f)
     } else 0f
-    // 切人/新增/删除后把选中的 tab 滚进可视区并居中，人员多到一屏放不下也能看见当前是谁
+    // 切人/新增/删除后，只有在选中的 tab 被挡在屏幕外时才把它滚进来（并居中）。
+    // 已经完整可见就一动不动：以前无条件 animateScrollToItem + 居中，每次切完整排 tab 都会自己滚一下。
     LaunchedEffect(state.activePersonId, state.people.size) {
         val index = state.people.indexOfFirst { it.id == state.activePersonId }
         if (index < 0) return@LaunchedEffect
+        val info = lazyState.layoutInfo
+        val visible = info.visibleItemsInfo.firstOrNull { it.index == index }
+        val fullyVisible = visible != null &&
+            visible.offset >= info.viewportStartOffset &&
+            visible.offset + visible.size <= info.viewportEndOffset
+        if (fullyVisible) return@LaunchedEffect
         runCatching {
-            lazyState.animateScrollToItem(index)
-            val info = lazyState.layoutInfo
-            val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@runCatching
-            val viewport = info.viewportEndOffset - info.viewportStartOffset
+            lazyState.scrollToItem(index)
+            val now = lazyState.layoutInfo
+            val item = now.visibleItemsInfo.firstOrNull { it.index == index } ?: return@runCatching
+            val viewport = now.viewportEndOffset - now.viewportStartOffset
             val delta = item.offset - ((viewport - item.size) / 2)
             if (kotlin.math.abs(delta) > 1) lazyState.scrollBy(delta.toFloat())
         }

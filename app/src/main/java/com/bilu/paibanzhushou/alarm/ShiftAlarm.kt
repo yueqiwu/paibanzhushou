@@ -82,7 +82,7 @@ object ShiftAlarm {
 
         val desired = LinkedHashMap<String, Pair<String, String>>()
         targetDays(person, config).forEach { (date, ban) ->
-            val trigger = triggerAt(date, config.hour, config.minute)
+            val trigger = triggerAt(date, config.hourOf(ban), config.minuteOf(ban))
             if (trigger > now && !skip.contains(key(date, ban))) desired[key(date, ban)] = date to ban
         }
 
@@ -104,7 +104,13 @@ object ShiftAlarm {
             // 每条闹钟用各自的 showIntent（requestCode 不同），避免 ROM 把「同一条闹钟」合并
             val showIntent = showIntent(context, date, ban)
             val ok = runCatching {
-                am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAt(date, config.hour, config.minute), showIntent), pi)
+                am.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(
+                        triggerAt(date, config.hourOf(ban), config.minuteOf(ban)),
+                        showIntent
+                    ),
+                    pi
+                )
             }.isSuccess
             if (ok) written.add(k)
         }
@@ -125,15 +131,28 @@ object ShiftAlarm {
     fun resyncActive(context: Context): Int {
         val config = AlarmStore.load()
         if (!config.enabled) return 0
+        val person = alarmPerson(config) ?: return -1
+        return sync(context, person, config)
+    }
+
+    /**
+     * 闹钟作用于哪个人员：优先用闹钟设置里单独选的人（[AlarmConfig.personId]），
+     * 没设过（1.0.22 之前的老数据）才退回「首页当前人员」。
+     */
+    fun alarmPerson(config: AlarmConfig): Person? {
         val people = runCatching {
             PeopleStore.loadPeople(
                 Dates.formatYmd(Dates.todayStart()),
                 listOf("白班", "中班", "休息", "休息")
             )
-        }.getOrNull() ?: return -1
+        }.getOrNull() ?: return null
+        if (people.isEmpty()) return null
+        val id = config.personId
+        if (id != null) {
+            people.firstOrNull { it.id == id }?.let { return it }
+        }
         val activeId = PeopleStore.loadActivePersonId()
-        val person = people.firstOrNull { it.id == activeId } ?: people.firstOrNull() ?: return -1
-        return sync(context, person, config)
+        return people.firstOrNull { it.id == activeId } ?: people.first()
     }
 
     /** 已写入的闹钟（按触发时间升序）：date / ban / 触发毫秒 */
@@ -141,7 +160,11 @@ object ShiftAlarm {
         return writtenKeys(context).mapNotNull { k ->
             val parts = k.split("#")
             if (parts.size != 2) null
-            else AlarmEntry(parts[0], parts[1], triggerAt(parts[0], config.hour, config.minute))
+            else AlarmEntry(
+                parts[0],
+                parts[1],
+                triggerAt(parts[0], config.hourOf(parts[1]), config.minuteOf(parts[1]))
+            )
         }.sortedBy { it.triggerAt }
     }
 
