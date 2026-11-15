@@ -1037,11 +1037,13 @@ private fun plainNotes(raw: String): String {
         .map { it.trim() }
         .filter { it.isNotEmpty() }
         .map { line ->
-            when {
+            val body = when {
                 line.startsWith("#") -> line.trimStart('#').trim()
                 line.startsWith("- ") || line.startsWith("* ") -> "· " + line.substring(2).trim()
                 else -> line.trimStart('>').trim()
             }
+            // 去掉 markdown 的加粗 / 行内代码标记，卡片里当纯文本显示
+            body.replace("**", "").replace("__", "").replace("`", "")
         }
         .filter { it.isNotEmpty() }
         .joinToString("\n")

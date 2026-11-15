@@ -107,39 +107,50 @@ object Updater {
      * 测速失败的排到最后（仍然作为兜底，总比没有强）。
      */
     private fun rankBySpeed(context: Context, urls: List<String>): List<String> {
-        val probe = 256 * 1024
         val ua = "banbiaoxiaoli/" + currentVersion(context)
-        val scored = urls.map { url ->
-            val score = runCatching {
-                val c = (URL(url).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 5000
-                    readTimeout = 6000
-                    instanceFollowRedirects = true
-                    setRequestProperty("Range", "bytes=0-" + (probe - 1))
-                    setRequestProperty("User-Agent", ua)
-                }
-                val t0 = android.os.SystemClock.elapsedRealtime()
-                var got = 0L
-                try {
-                    if (c.responseCode !in 200..299) return@runCatching 0.0
-                    c.inputStream.use { input ->
-                        val buf = ByteArray(32 * 1024)
-                        while (got < probe) {
-                            val r = input.read(buf)
-                            if (r <= 0) break
-                            got += r
-                        }
-                    }
-                } finally {
-                    runCatching { c.disconnect() }
-                }
-                val ms = (android.os.SystemClock.elapsedRealtime() - t0).coerceAtLeast(1L)
-                if (got <= 0) 0.0 else got.toDouble() / ms.toDouble()
-            }.getOrDefault(0.0)
-            android.util.Log.i("Updater", "speed " + score + " KB/ms <- " + url)
-            url to score
+        val scores = java.util.concurrent.ConcurrentHashMap<String, Double>()
+        // 并行测速 + 总超时 4.5s：不能让用户对着「正在下载 0%」干等
+        val threads = urls.map { url ->
+            Thread {
+                scores[url] = runCatching { probeSpeed(url, ua) }.getOrDefault(0.0)
+                android.util.Log.i("Updater", "speed " + scores[url] + " KB/ms <- " + url)
+            }.apply { isDaemon = true; start() }
         }
-        return scored.sortedByDescending { it.second }.map { it.first }
+        val deadline = android.os.SystemClock.elapsedRealtime() + 4500
+        for (t in threads) {
+            val left = deadline - android.os.SystemClock.elapsedRealtime()
+            if (left > 0) runCatching { t.join(left) }
+        }
+        return urls.sortedByDescending { scores[it] ?: 0.0 }
+    }
+
+    /** 拉 128KB 计时，返回 KB/ms；连不上或超时返回 0 */
+    private fun probeSpeed(url: String, ua: String): Double {
+        val probe = 128 * 1024
+        val c = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 3000
+            readTimeout = 3000
+            instanceFollowRedirects = true
+            setRequestProperty("Range", "bytes=0-" + (probe - 1))
+            setRequestProperty("User-Agent", ua)
+        }
+        var got = 0L
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        try {
+            if (c.responseCode !in 200..299) return 0.0
+            c.inputStream.use { input ->
+                val buf = ByteArray(32 * 1024)
+                while (got < probe) {
+                    val r = input.read(buf)
+                    if (r <= 0) break
+                    got += r
+                }
+            }
+        } finally {
+            runCatching { c.disconnect() }
+        }
+        val ms = (android.os.SystemClock.elapsedRealtime() - t0).coerceAtLeast(1L)
+        return if (got <= 0) 0.0 else got.toDouble() / ms.toDouble()
     }
 
     /** 下载到应用私有目录，返回文件；[onProgress] 参数为 0..100（不知道总长时为 -1） */
