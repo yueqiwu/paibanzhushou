@@ -88,14 +88,86 @@ object Updater {
         return false
     }
 
+    /**
+     * 下载源：自有域名优先（国内直连最快），GitHub 原链与两个 gh 代理兜底。
+     * 具体顺序还会按实测速度重排，见 [rankBySpeed]。
+     */
+    private fun candidateUrls(info: ReleaseInfo): List<String> {
+        val name = "banbiaoxiaoli-" + info.version + ".apk"
+        return listOf(
+            "https://qipaclub.top/paibanzhushou/" + name,
+            info.apkUrl,
+            "https://ghproxy.net/" + info.apkUrl,
+            "https://gh-proxy.com/" + info.apkUrl
+        ).filter { it.startsWith("http") }.distinct()
+    }
+
+    /**
+     * 每个源先用 Range 抓 256KB 测一下速度，快的排前面。
+     * 测速失败的排到最后（仍然作为兜底，总比没有强）。
+     */
+    private fun rankBySpeed(context: Context, urls: List<String>): List<String> {
+        val probe = 256 * 1024
+        val ua = "banbiaoxiaoli/" + currentVersion(context)
+        val scored = urls.map { url ->
+            val score = runCatching {
+                val c = (URL(url).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 5000
+                    readTimeout = 6000
+                    instanceFollowRedirects = true
+                    setRequestProperty("Range", "bytes=0-" + (probe - 1))
+                    setRequestProperty("User-Agent", ua)
+                }
+                val t0 = android.os.SystemClock.elapsedRealtime()
+                var got = 0L
+                try {
+                    if (c.responseCode !in 200..299) return@runCatching 0.0
+                    c.inputStream.use { input ->
+                        val buf = ByteArray(32 * 1024)
+                        while (got < probe) {
+                            val r = input.read(buf)
+                            if (r <= 0) break
+                            got += r
+                        }
+                    }
+                } finally {
+                    runCatching { c.disconnect() }
+                }
+                val ms = (android.os.SystemClock.elapsedRealtime() - t0).coerceAtLeast(1L)
+                if (got <= 0) 0.0 else got.toDouble() / ms.toDouble()
+            }.getOrDefault(0.0)
+            android.util.Log.i("Updater", "speed " + score + " KB/ms <- " + url)
+            url to score
+        }
+        return scored.sortedByDescending { it.second }.map { it.first }
+    }
+
     /** 下载到应用私有目录，返回文件；[onProgress] 参数为 0..100（不知道总长时为 -1） */
     fun download(context: Context, info: ReleaseInfo, onProgress: (Int) -> Unit): File? {
         val dir = File(context.getExternalFilesDir(null) ?: context.filesDir, "updates")
         if (!dir.exists()) dir.mkdirs()
         val target = File(dir, "banbiaoxiaoli-" + info.version + ".apk")
         if (target.exists() && info.apkSize > 0 && target.length() == info.apkSize) return target
+        val ranked = rankBySpeed(context, candidateUrls(info))
+        for ((i, url) in ranked.withIndex()) {
+            android.util.Log.i("Updater", "download try #" + i + " " + url)
+            val file = downloadFrom(context, url, info, dir, target, onProgress)
+            if (file != null) return file
+            onProgress(0)
+        }
+        return null
+    }
+
+    private fun downloadFrom(
+        context: Context,
+        url: String,
+        info: ReleaseInfo,
+        dir: File,
+        target: File,
+        onProgress: (Int) -> Unit
+    ): File? {
         val conn = runCatching {
-            (URL(info.apkUrl).openConnection() as HttpURLConnection).apply {
+            (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 15000
                 readTimeout = 30000
                 instanceFollowRedirects = true
@@ -120,12 +192,22 @@ object Updater {
                     }
                 }
             }
+            // 长度对不上（被截断 / 代理返回错误页）就当这次失败，换下一个源
+            if (info.apkSize > 0 && tmp.length() != info.apkSize) {
+                android.util.Log.w("Updater", "size mismatch " + tmp.length() + " != " + info.apkSize)
+                tmp.delete()
+                return null
+            }
             if (target.exists()) target.delete()
-            tmp.renameTo(target)
+            if (!tmp.renameTo(target)) {
+                tmp.delete()
+                return null
+            }
             onProgress(100)
-            target
+            return target
         } catch (t: Throwable) {
-            null
+            android.util.Log.w("Updater", "download failed: " + t)
+            return null
         } finally {
             runCatching { conn.disconnect() }
         }

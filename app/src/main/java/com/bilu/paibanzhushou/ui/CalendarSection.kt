@@ -58,8 +58,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
@@ -85,7 +88,9 @@ fun CalendarSection(
     state: IndexState,
     onOpenMemberTable: () -> Unit,
     person: Person? = null,
-    interactive: Boolean = true
+    interactive: Boolean = true,
+    /** 只把「月历卡」的位置回报给首页：整卡之外（标题/图例/月份栏）要留给左右滑动切人 */
+    onGridBounds: ((Rect) -> Unit)? = null
 ) {
     Column(Modifier.fillMaxWidth().padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(16))) {
         Row(
@@ -138,7 +143,7 @@ fun CalendarSection(
         bgAlpha = 0.66f,
         contentPadding = PaddingValues(Rpx.dp(8))
     ) {
-        CalendarGrid(state = state, person = person, interactive = interactive)
+        CalendarGrid(state = state, person = person, interactive = interactive, onGridBounds = onGridBounds)
     }
 }
 
@@ -238,7 +243,13 @@ private const val PAGER_MIDDLE = 6000
 private const val PAGER_COUNT = 12001
 
 @Composable
-private fun CalendarGrid(state: IndexState, person: Person? = null, interactive: Boolean = true) {
+private fun CalendarGrid(
+    state: IndexState,
+    person: Person? = null,
+    interactive: Boolean = true,
+    /** 只把「日期网格」的位置回报给首页：网格外的月份栏 / 星期栏要留给左右滑动切人 */
+    onGridBounds: ((Rect) -> Unit)? = null
+) {
     var showMonthPicker by remember { mutableStateOf(false) }
     val monthFirst = state.calendarMonthMs
     val rowHeight = calendarRowHeight()
@@ -259,7 +270,8 @@ private fun CalendarGrid(state: IndexState, person: Person? = null, interactive:
                     monthFirst = monthFirst,
                     containerHeight = containerHeight,
                     interactive = true,
-                    onOpenMonthPicker = { showMonthPicker = true }
+                    onOpenMonthPicker = { showMonthPicker = true },
+                    onGridBounds = onGridBounds
                 )
             } else {
                 CalendarPeekPage(state = state, person = person, containerHeight = containerHeight)
@@ -307,7 +319,8 @@ private fun CalendarPager(
     monthFirst: Long,
     containerHeight: Dp,
     interactive: Boolean,
-    onOpenMonthPicker: () -> Unit
+    onOpenMonthPicker: () -> Unit,
+    onGridBounds: ((Rect) -> Unit)? = null
 ) {
     // true = 整月，false = 单周（沿开源版 foldOpen 语义）
     val expandMonth = state.foldOpen
@@ -367,12 +380,17 @@ private fun CalendarPager(
         )
         CalendarWeekHeader()
 
-        // 日期网格
+        // 日期网格（只有这一块吃掉左右滑动去翻月，其余区域用于切人）
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(containerHeight)
                 .clipToBounds()
+                .then(
+                    if (onGridBounds != null) {
+                        Modifier.onGloballyPositioned { onGridBounds(it.boundsInRoot()) }
+                    } else Modifier
+                )
         ) {
             HorizontalPager(
                 state = pagerState,

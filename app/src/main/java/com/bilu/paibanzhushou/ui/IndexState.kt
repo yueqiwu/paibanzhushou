@@ -92,6 +92,7 @@ class IndexState(
         const val PERM_EXACT = "exact"
         const val PERM_OVERLAY = "overlay"
         const val PERM_FSI = "fsi"
+        const val PERM_DND = "dnd"
     }
 
     val dragController = DragSortController()
@@ -867,6 +868,17 @@ class IndexState(
             .onFailure { runCatching { context.startActivity(fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
 
+    /** 跳系统「声音与振动」设置：闹钟铃声统一由系统设置决定，App 里只做入口 */
+    fun openSystemSoundSettings() {
+        val direct = Intent(Settings.ACTION_SOUND_SETTINGS)
+        val alarm = Intent(Settings.ACTION_SETTINGS)
+        val app = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
+        for (i in listOf(direct, alarm, app)) {
+            val ok = runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+            if (ok) return
+        }
+    }
+
     /**
      * 检查「闹钟真的能不能响」：通知权限 + Android 14+ 的全屏通知。
      * 缺任何一个，到点都只会静默或只弹一条通知，所以页面上要显式提示。
@@ -913,6 +925,12 @@ class IndexState(
                     title = "全屏通知",
                     desc = "锁屏时自动亮屏显示响铃页（部分机型叫「锁屏显示」）",
                     ok = AlarmNotifications.canUseFullScreen(context)
+                ),
+                AlarmPermission(
+                    id = PERM_DND,
+                    title = "勿扰 / 睡眠模式例外",
+                    desc = "手机或手表开了勿扰、睡眠模式时，闹钟仍按闹钟音量响铃",
+                    ok = AlarmNotifications.canBypassDnd(context)
                 )
             )
         }
@@ -947,6 +965,11 @@ class IndexState(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg)
                 } else null,
+                app
+            )
+            // 勿扰访问是「整机一份」的授权页，没有 package 参数
+            PERM_DND -> listOf(
+                Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS),
                 app
             )
             else -> listOf(app)

@@ -135,8 +135,10 @@ fun Modifier.personSwipeSwitch(
     }
 
     awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
-        if (down.isConsumed || !enabled()) return@awaitEachGesture
+        // 走 Initial 阶段：抢在按钮 / 标签的 clickable 之前判断方向，
+        // 否则按月栏那种 clickable 会先把 down 消费掉，滑动就永远起不来。
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        if (!enabled()) return@awaitEachGesture
         val bounds = calendarBounds()
         if (bounds != null && bounds.contains(down.position)) return@awaitEachGesture
         val width = (widthPx().takeIf { it > 1f } ?: size.width.toFloat())
@@ -149,7 +151,7 @@ fun Modifier.personSwipeSwitch(
         var tracking = false
 
         while (true) {
-            val event = awaitPointerEvent(PointerEventPass.Main)
+            val event = awaitPointerEvent(PointerEventPass.Initial)
             val change = event.changes.firstOrNull { it.id == down.id } ?: break
             dx = change.position.x - down.position.x
             val dy = change.position.y - down.position.y
@@ -161,7 +163,6 @@ fun Modifier.personSwipeSwitch(
                     continue
                 }
                 if (abs(dy) >= abs(dx)) return@awaitEachGesture // 竖向：交给页面滚动
-                if (change.isConsumed) return@awaitEachGesture // 横向滚动区 / 日历已接管
                 val sign = if (dx < 0f) 1 else -1
                 val target = neighbourOf(sign) ?: return@awaitEachGesture
                 swipe.prepare(target, sign)
@@ -170,11 +171,6 @@ fun Modifier.personSwipeSwitch(
             }
 
             if (tracking) {
-                if (change.isConsumed) {
-                    // 被别的组件接管（例如横向滚动区突然开始滚动）
-                    swipe.cancel()
-                    return@awaitEachGesture
-                }
                 change.consume()
                 val sign = if (dx < 0f) -1 else 1
                 val raw = abs(dx)

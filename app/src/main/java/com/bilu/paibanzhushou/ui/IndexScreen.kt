@@ -42,6 +42,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,6 +75,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas as GfxCanvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -125,6 +129,26 @@ fun IndexScreen(
     val canSwipe = !dragging && !pickerVisible && state.people.size > 1
     val currentPerson = state.people.firstOrNull { it.id == state.activePersonId }
 
+    // 切人特效：新内容淡入 + 轻微上浮，跟日历的滑动衔接成一次完整的转场。
+    // 首次进入（activePersonId 从空变成真实 id）不做动画，否则开屏会整块发灰。
+    var shownPersonId by remember { mutableStateOf(state.activePersonId) }
+    val personAnim = remember { Animatable(1f) }
+    LaunchedEffect(state.activePersonId) {
+        if (state.activePersonId == shownPersonId) {
+            // 上一轮动画可能被后续重组打断，这里兜底拉回不透明
+            if (personAnim.value < 1f) personAnim.animateTo(1f, tween(160))
+            return@LaunchedEffect
+        }
+        val animate = shownPersonId.isNotEmpty()
+        shownPersonId = state.activePersonId
+        if (!animate) {
+            personAnim.snapTo(1f)
+            return@LaunchedEffect
+        }
+        personAnim.snapTo(0f)
+        personAnim.animateTo(1f, tween(240))
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize().background(C.pageBg)) {
         val widthPx = with(density) { maxWidth.toPx() }
         PageBackground()
@@ -149,15 +173,27 @@ fun IndexScreen(
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
             Spacer(Modifier.height(Rpx.dp(8)))
 
-            HeroCard(state, onOpenAlarmSettings)
-            ConfigCard(state, onConfettiOrigin = { confettiOrigin = it })
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        val t = personAnim.value
+                        alpha = 0.45f + 0.55f * t
+                        translationY = (1f - t) * Rpx.dp(12).toPx()
+                        scaleX = 0.992f + 0.008f * t
+                        scaleY = scaleX
+                    }
+            ) {
+                HeroCard(state, onOpenAlarmSettings)
+                ConfigCard(state, swipe, widthPx) { confettiOrigin = it }
+            }
             SwipeableCalendar(
                 state = state,
                 swipe = swipe,
                 currentPerson = currentPerson,
                 widthPx = widthPx,
                 onOpenMemberTable = onOpenMemberTable,
-                onBounds = { calendarBounds = it }
+                onGridBounds = { calendarBounds = it }
             )
             CopyrightFooter(state)
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
@@ -185,20 +221,23 @@ private fun SwipeableCalendar(
     currentPerson: Person?,
     widthPx: Float,
     onOpenMemberTable: () -> Unit,
-    onBounds: (Rect) -> Unit
+    onGridBounds: (Rect) -> Unit
 ) {
     Box(
         Modifier
             .fillMaxWidth()
             .clipToBounds()
     ) {
+        val dragProgress = (kotlin.math.abs(swipe.offset) / widthPx.coerceAtLeast(1f)).coerceIn(0f, 1f)
         Box(
             Modifier
                 .fillMaxWidth()
-                .graphicsLayer { translationX = swipe.offset }
-                .onGloballyPositioned {
-                    // 只在静止时记录位置：拖动中采到的是平移后的位置，会把日历判定区带偏
-                    if (swipe.offset == 0f) onBounds(it.boundsInRoot())
+                .graphicsLayer {
+                    translationX = swipe.offset
+                    // 滑走的一页稍微淡一点、缩一点，滑进来的那页从 0.9 补到 1，转场更像「换页」而不是「平移」
+                    alpha = 1f - 0.12f * dragProgress
+                    scaleX = 1f - 0.012f * dragProgress
+                    scaleY = scaleX
                 }
         ) {
             // CalendarSection 会发出两个并列的布局节点（标题列 + 日历卡），这里必须用 Column 包一层，
@@ -208,7 +247,9 @@ private fun SwipeableCalendar(
                     state = state,
                     onOpenMemberTable = onOpenMemberTable,
                     person = currentPerson,
-                    interactive = true
+                    interactive = true,
+                    // 只有月历卡本身吃掉横滑（翻月）；标题、图例、月份栏都交给外层切人
+                    onGridBounds = onGridBounds
                 )
             }
         }
@@ -219,6 +260,7 @@ private fun SwipeableCalendar(
                     .fillMaxWidth()
                     .graphicsLayer {
                         translationX = swipe.offset + swipe.peekSign * widthPx
+                        alpha = 0.9f + 0.1f * dragProgress
                     }
             ) {
                 Column(Modifier.fillMaxWidth()) {
@@ -437,6 +479,8 @@ private fun AlarmTopButton(state: IndexState, onClick: () -> Unit) {
 @Composable
 private fun ConfigCard(
     state: IndexState,
+    swipe: PersonSwipeState,
+    widthPx: Float,
     onConfettiOrigin: (Offset) -> Unit
 ) {
     GlassCard(
@@ -487,7 +531,7 @@ private fun ConfigCard(
             }
         }
 
-        PeopleTabs(state)
+        PeopleTabs(state, swipe, widthPx)
 
         androidx.compose.animation.AnimatedVisibility(
             visible = state.configOpen,
@@ -502,19 +546,42 @@ private fun ConfigCard(
 }
 
 @Composable
-private fun PeopleTabs(state: IndexState) {
+private fun PeopleTabs(state: IndexState, swipe: PersonSwipeState, widthPx: Float) {
     val controller = state.dragController
-    Row(
-        Modifier
+    val lazyState = rememberLazyListState()
+    // 拖动切人的进度：当前人员的选中态随手指淡出、目标人员同步淡入，
+    // 手指还没松开，上面这排 tab 就已经在跟着走了。
+    val progress = if (swipe.swiping && swipe.peekPerson != null) {
+        (kotlin.math.abs(swipe.offset) / widthPx.coerceAtLeast(1f)).coerceIn(0f, 1f)
+    } else 0f
+    // 切人/新增/删除后把选中的 tab 滚进可视区并居中，人员多到一屏放不下也能看见当前是谁
+    LaunchedEffect(state.activePersonId, state.people.size) {
+        val index = state.people.indexOfFirst { it.id == state.activePersonId }
+        if (index < 0) return@LaunchedEffect
+        runCatching {
+            lazyState.animateScrollToItem(index)
+            val info = lazyState.layoutInfo
+            val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@runCatching
+            val viewport = info.viewportEndOffset - info.viewportStartOffset
+            val delta = item.offset - ((viewport - item.size) / 2)
+            if (kotlin.math.abs(delta) > 1) lazyState.scrollBy(delta.toFloat())
+        }
+    }
+    androidx.compose.foundation.lazy.LazyRow(
+        state = lazyState,
+        modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
             .padding(top = Rpx.dp(10)),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        state.people.forEachIndexed { index, person ->
-            val active = person.id == state.activePersonId
+        itemsIndexed(state.people, key = { _, p -> p.id }) { index, person ->
+            val weight = when (person.id) {
+                swipe.peekPerson?.id -> progress
+                state.activePersonId -> 1f - progress
+                else -> 0f
+            }.coerceIn(0f, 1f)
+            val active = weight > 0.5f
             val isSource = controller.dragging && controller.kind == DragKind.PEOPLE && controller.fromIndex == index
-            val isTarget = controller.dragging && controller.kind == DragKind.PEOPLE && controller.toIndex == index && controller.fromIndex != index
             val pressScale by animateFloatAsState(
                 targetValue = if (controller.isPressing(DragKind.PEOPLE, index)) 0.94f else 1f,
                 animationSpec = tween(120),
@@ -541,14 +608,23 @@ private fun PeopleTabs(state: IndexState) {
                 Row(
                     Modifier
                         .clip(RoundedCornerShape(999.dp))
+                        // 过渡中按进度在白底和浅蓝底之间插值；线性渐变至少要两个颜色，所以走纯色分支
                         .then(
-                            if (active) Modifier.background(
-                                Brush.linearGradient(listOf(Color(0x386AC695), Color(0x334A90E2)))
-                            ) else Modifier.background(Color(0xB3FFFFFF))
+                            if (weight >= 0.999f) {
+                                Modifier.background(
+                                    Brush.linearGradient(listOf(Color(0x386AC695), Color(0x334A90E2))),
+                                    RoundedCornerShape(999.dp)
+                                )
+                            } else {
+                                Modifier.background(
+                                    lerp(Color(0xB3FFFFFF), Color(0xFFD9E9F8), weight),
+                                    RoundedCornerShape(999.dp)
+                                )
+                            }
                         )
                         .border(
                             Rpx.dp(1),
-                            if (active) Color(0x594A90E2) else Color(0x0F000000),
+                            lerp(Color(0x0F000000), Color(0x594A90E2), weight),
                             RoundedCornerShape(999.dp)
                         )
                         .padding(
@@ -562,7 +638,7 @@ private fun PeopleTabs(state: IndexState) {
                     Text(
                         text = person.name,
                         fontSize = Rpx.sp(24),
-                        color = if (active) Color(0xFF2B6CB0) else Color(0xFF444444),
+                        color = lerp(Color(0xFF444444), Color(0xFF2B6CB0), weight),
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                         maxLines = 1
                     )
@@ -576,14 +652,17 @@ private fun PeopleTabs(state: IndexState) {
                 }
             }
         }
-        Box(
-            Modifier
-                .dashedBorder(Color(0x664A90E2), Rpx.dp(999))
-                .background(Color(0x0F4A90E2), RoundedCornerShape(999.dp))
-                .clickable { state.addPerson() }
-                .padding(horizontal = Rpx.dp(24), vertical = Rpx.dp(10))
-        ) {
-            Text("+ 新增", fontSize = Rpx.sp(24), color = C.blue)
+        item {
+            Box(
+                Modifier
+                    .padding(end = Rpx.dp(12))
+                    .dashedBorder(Color(0x664A90E2), Rpx.dp(999))
+                    .background(Color(0x0F4A90E2), RoundedCornerShape(999.dp))
+                    .clickable { state.addPerson() }
+                    .padding(horizontal = Rpx.dp(24), vertical = Rpx.dp(10))
+            ) {
+                Text("+ 新增", fontSize = Rpx.sp(24), color = C.blue)
+            }
         }
     }
 }
@@ -952,12 +1031,19 @@ private fun CopyrightFooter(state: IndexState) {
 
 /* ---------------- 版本 / 检查更新 ---------------- */
 
-/** Release notes 是 markdown，卡片里只留纯文本前几行 */
+/** Release notes 是 markdown，卡片里转成纯文本：标题去掉 #、列表换成 ·，内容完整不截断 */
 private fun plainNotes(raw: String): String {
     return raw.lineSequence()
-        .map { it.trim().trimStart('#', '*', '-', ' ').trim() }
+        .map { it.trim() }
         .filter { it.isNotEmpty() }
-        .take(3)
+        .map { line ->
+            when {
+                line.startsWith("#") -> line.trimStart('#').trim()
+                line.startsWith("- ") || line.startsWith("* ") -> "· " + line.substring(2).trim()
+                else -> line.trimStart('>').trim()
+            }
+        }
+        .filter { it.isNotEmpty() }
         .joinToString("\n")
 }
 
@@ -986,13 +1072,12 @@ private fun UpdateSection(state: IndexState) {
                 )
                 val notes = remember(info.notes) { plainNotes(info.notes) }
                 if (notes.isNotBlank()) {
+                    // 更新内容要能看到全部：整张卡片随内容长高，外层页面本来就能上下滚
                     Text(
                         text = notes,
                         fontSize = Rpx.sp(20),
                         lineHeight = Rpx.sp(32),
                         color = C.textSub,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = Rpx.dp(6))
                     )
                 }

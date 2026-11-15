@@ -47,7 +47,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.bilu.paibanzhushou.core.Schedule
-import com.bilu.paibanzhushou.data.AlarmRingtones
 
 /**
  * 闹钟提醒设置页：把原先塞在首页「排班设置 → 展开」里的闹钟设置与权限整体搬到这里，
@@ -65,7 +64,6 @@ fun AlarmSettingsScreen(
 ) {
     val context = LocalContext.current
     var showAlarmTime by remember { mutableStateOf(false) }
-    var showRingtone by remember { mutableStateOf(false) }
     val config = state.alarmConfig
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -241,32 +239,31 @@ fun AlarmSettingsScreen(
                 }
             }
 
-            // 闹钟铃声
+            // 闹钟铃声：不再自己在 App 里选，直接交给系统「声音与振动」设置，App 播的就是系统闹钟铃声
             Row(
-                Modifier.fillMaxWidth().padding(top = Rpx.dp(18)),
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = Rpx.dp(18))
+                    .clip(RoundedCornerShape(Rpx.dp(12)))
+                    .clickable { state.openSystemSoundSettings() },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("闹钟铃声", fontSize = Rpx.sp(26), color = C.textLabel)
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                    Box(
-                        Modifier
-                            .background(C.fieldBg, RoundedCornerShape(Rpx.dp(16)))
-                            .border(Rpx.dp(1), Color(0x0A000000), RoundedCornerShape(Rpx.dp(16)))
-                            .clickable { showRingtone = true }
-                            .padding(horizontal = Rpx.dp(20))
-                            .height(Rpx.dp(64)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = AlarmRingtones.label(context, config.ringtone),
-                            fontSize = Rpx.sp(24),
-                            color = Color(0xFF111111),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = "跟随系统 ›",
+                        fontSize = Rpx.sp(24),
+                        color = C.blue
+                    )
                 }
             }
+            Text(
+                text = "在系统「声音与振动 → 闹钟铃声」里换，App 响铃时播的就是它",
+                fontSize = Rpx.sp(20),
+                color = C.hint,
+                lineHeight = Rpx.sp(28),
+                modifier = Modifier.padding(top = Rpx.dp(6))
+            )
 
             // 开关
             Row(
@@ -357,6 +354,15 @@ fun AlarmSettingsScreen(
             perms.forEach { perm ->
                 AlarmPermissionRow(perm) { state.openAlarmPermission(perm.id) }
             }
+            // 手表端是独立固件：睡眠模式由手表自己决定要不要静音，App 只能把通知按「闹钟」类别发出去
+            Text(
+                text = "手表 / 手环：手表开启睡眠模式后会自行屏蔽通知。需要在手表的「睡眠模式 / 勿扰」里把「班表小历」加进允许提醒（或允许闹钟），" +
+                    "手机这边的闹钟不受影响。",
+                fontSize = Rpx.sp(20),
+                color = C.hint,
+                lineHeight = Rpx.sp(30),
+                modifier = Modifier.padding(top = Rpx.dp(14))
+            )
         }
 
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
@@ -370,15 +376,6 @@ fun AlarmSettingsScreen(
         onPick = { h, m ->
             showAlarmTime = false
             state.setAlarmTime(h, m)
-        }
-    )
-    RingtonePickerSheet(
-        show = showRingtone,
-        current = config.ringtone,
-        onDismiss = { showRingtone = false },
-        onPick = { value ->
-            showRingtone = false
-            state.setAlarmRingtone(value)
         }
     )
 }

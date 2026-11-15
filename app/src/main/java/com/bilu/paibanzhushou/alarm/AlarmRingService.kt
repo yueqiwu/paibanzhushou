@@ -230,14 +230,10 @@ class AlarmRingService : Service() {
     private fun startRinging() {
         if (player != null) return
         runCatching {
-            // 设置里选过铃声就用选的；选了「静音」则只震动；没选过跟随系统默认闹钟铃声
-            val chosen = com.bilu.paibanzhushou.data.AlarmStore.load().ringtone
-            val uri: android.net.Uri? = when (chosen) {
-                com.bilu.paibanzhushou.data.AlarmConfig.RINGTONE_SILENT -> null
-                null, "" -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-                else -> runCatching { android.net.Uri.parse(chosen) }.getOrNull()
-            }
+            // 铃声统一跟随系统「闹钟铃声」：App 里只提供跳转入口，不再自己存一份，
+            // 这样用户在系统设置里换过铃声后，响铃立刻生效
+            val uri: android.net.Uri? = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
             if (uri == null) {
                 Log.i(TAG, "ringtone=silent, vibrate only")
                 startVibrating()

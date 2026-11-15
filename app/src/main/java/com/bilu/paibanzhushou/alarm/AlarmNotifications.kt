@@ -133,6 +133,17 @@ object AlarmNotifications {
         runCatching { nm.createNotificationChannel(channel) }
     }
 
+    /**
+     * 是否允许闹钟「绕过勿扰 / 睡眠模式」。
+     *
+     * 通道上虽然写了 setBypassDnd(true)，但系统只有在拿到「勿扰访问权限」时才认；
+     * 没有权限时手机和手表都会按勿扰规则静音，所以要在设置页里显式引导用户开一次。
+     */
+    fun canBypassDnd(context: Context): Boolean {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return false
+        return runCatching { nm.isNotificationPolicyAccessGranted }.getOrDefault(false)
+    }
+
     /** 是否有通知权限（没有就不发，避免系统静默丢） */
     fun canPost(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
