@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.bilu.paibanzhushou.core.Schedule
+import com.bilu.paibanzhushou.data.AlarmRingtones
 
 /**
  * 闹钟提醒设置页：把原先塞在首页「排班设置 → 展开」里的闹钟设置与权限整体搬到这里，
@@ -64,6 +65,7 @@ fun AlarmSettingsScreen(
 ) {
     val context = LocalContext.current
     var showAlarmTime by remember { mutableStateOf(false) }
+    var showRingtone by remember { mutableStateOf(false) }
     val config = state.alarmConfig
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -239,26 +241,26 @@ fun AlarmSettingsScreen(
                 }
             }
 
-            // 闹钟铃声：不再自己在 App 里选，直接交给系统「声音与振动」设置，App 播的就是系统闹钟铃声
+            // 闹钟铃声：App 内自选（可跟随系统、也可选手机里任意铃声，或只震动）
             Row(
                 Modifier
                     .fillMaxWidth()
                     .padding(top = Rpx.dp(18))
                     .clip(RoundedCornerShape(Rpx.dp(12)))
-                    .clickable { state.openSystemSoundSettings() },
+                    .clickable { showRingtone = true },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("闹钟铃声", fontSize = Rpx.sp(26), color = C.textLabel)
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                     Text(
-                        text = "跟随系统 ›",
+                        text = AlarmRingtones.label(context, config.ringtone) + " ›",
                         fontSize = Rpx.sp(24),
                         color = C.blue
                     )
                 }
             }
             Text(
-                text = "在系统「声音与振动 → 闹钟铃声」里换，App 响铃时播的就是它",
+                text = "点这里换铃声：可以选系统闹钟铃声、手机里的其它铃声，或「静音」只震动",
                 fontSize = Rpx.sp(20),
                 color = C.hint,
                 lineHeight = Rpx.sp(28),
@@ -354,6 +356,16 @@ fun AlarmSettingsScreen(
             perms.forEach { perm ->
                 AlarmPermissionRow(perm) { state.openAlarmPermission(perm.id) }
             }
+            // 手机侧的勿扰：系统默认把「闹钟」列为优先级例外，App 的响铃走 USAGE_ALARM，一般不会被静音；
+            // 若某些机型屏蔽了，需要去系统「勿扰」里允许闹钟
+            Text(
+                text = "手机勿扰 / 睡眠模式：系统默认把闹钟列为优先级例外，闹钟会照常响；如果你的机型连闹钟一起屏蔽了，" +
+                    "请在系统「设置 → 声音与振动 → 勿扰」里把「闹钟」勾上。",
+                fontSize = Rpx.sp(20),
+                color = C.hint,
+                lineHeight = Rpx.sp(30),
+                modifier = Modifier.padding(top = Rpx.dp(14))
+            )
             // 手表端是独立固件：睡眠模式由手表自己决定要不要静音，App 只能把通知按「闹钟」类别发出去
             Text(
                 text = "手表 / 手环：手表开启睡眠模式后会自行屏蔽通知。需要在手表的「睡眠模式 / 勿扰」里把「班表小历」加进允许提醒（或允许闹钟），" +
@@ -376,6 +388,15 @@ fun AlarmSettingsScreen(
         onPick = { h, m ->
             showAlarmTime = false
             state.setAlarmTime(h, m)
+        }
+    )
+    RingtonePickerSheet(
+        show = showRingtone,
+        current = config.ringtone,
+        onDismiss = { showRingtone = false },
+        onPick = { value ->
+            showRingtone = false
+            state.setAlarmRingtone(value)
         }
     )
 }

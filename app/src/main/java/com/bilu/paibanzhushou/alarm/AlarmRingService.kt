@@ -230,10 +230,15 @@ class AlarmRingService : Service() {
     private fun startRinging() {
         if (player != null) return
         runCatching {
-            // 铃声统一跟随系统「闹钟铃声」：App 里只提供跳转入口，不再自己存一份，
-            // 这样用户在系统设置里换过铃声后，响铃立刻生效
-            val uri: android.net.Uri? = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            // 铃声：用户在设置页里自选（null = 跟随系统闹钟铃声，RINGTONE_SILENT = 只震动）
+            val stored = com.bilu.paibanzhushou.data.AlarmStore.load().ringtone
+            val systemUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            val uri: android.net.Uri? = when (stored) {
+                com.bilu.paibanzhushou.data.AlarmConfig.RINGTONE_SILENT -> null
+                null -> systemUri
+                else -> runCatching { android.net.Uri.parse(stored) }.getOrNull() ?: systemUri
+            }
             if (uri == null) {
                 Log.i(TAG, "ringtone=silent, vibrate only")
                 startVibrating()

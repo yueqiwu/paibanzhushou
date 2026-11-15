@@ -1,9 +1,14 @@
 package com.bilu.paibanzhushou.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -95,52 +100,66 @@ fun AppRoot() {
     // 锁定 fontScale：uni 的 rpx 不受系统字体大小影响
     CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1f)) {
         Box(Modifier.fillMaxSize().background(C.pageBg)) {
-            if (route == "alarmSettings") {
-                AlarmSettingsScreen(
-                    state = indexState,
-                    onBack = {
-                        indexState.onShow()
-                        route = "index"
-                    },
-                    onOpenAlarmList = {
-                        indexState.flush()
-                        route = "alarms"
+            // 页面切换：新页面从右侧滑入并淡入，旧页面往左微移淡出；返回时方向相反
+            AnimatedContent(
+                targetState = route,
+                transitionSpec = {
+                    val dir = if (targetState == "index") -1 else 1
+                    (slideInHorizontally(tween(300)) { w -> dir * (w / 3) } + fadeIn(tween(240))) togetherWith
+                        (slideOutHorizontally(tween(300)) { w -> -dir * (w / 6) } + fadeOut(tween(200)))
+                },
+                label = "route"
+            ) { current ->
+                when (current) {
+                    "alarmSettings" -> {
+                        AlarmSettingsScreen(
+                            state = indexState,
+                            onBack = {
+                                indexState.onShow()
+                                route = "index"
+                            },
+                            onOpenAlarmList = {
+                                indexState.flush()
+                                route = "alarms"
+                            }
+                        )
+                        BackHandler {
+                            indexState.onShow()
+                            route = "index"
+                        }
                     }
-                )
-                BackHandler {
-                    indexState.onShow()
-                    route = "index"
-                }
-            } else if (route == "alarms") {
-                AlarmListScreen(state = indexState, onBack = {
-                    indexState.onShow()
-                    route = "index"
-                })
-                BackHandler {
-                    indexState.onShow()
-                    route = "index"
-                }
-            } else if (route == "member") {
-                MemberTableScreen(onBack = {
-                    indexState.onShow()
-                    route = "index"
-                })
-                BackHandler {
-                    indexState.onShow()
-                    route = "index"
-                }
-            } else {
-                IndexScreen(
-                    state = indexState,
-                    onOpenMemberTable = {
-                        indexState.flush()
-                        route = "member"
-                    },
-                    onOpenAlarmSettings = {
-                        indexState.flush()
-                        route = "alarmSettings"
+                    "alarms" -> {
+                        AlarmListScreen(state = indexState, onBack = {
+                            indexState.onShow()
+                            route = "index"
+                        })
+                        BackHandler {
+                            indexState.onShow()
+                            route = "index"
+                        }
                     }
-                )
+                    "member" -> {
+                        MemberTableScreen(onBack = {
+                            indexState.onShow()
+                            route = "index"
+                        })
+                        BackHandler {
+                            indexState.onShow()
+                            route = "index"
+                        }
+                    }
+                    else -> IndexScreen(
+                        state = indexState,
+                        onOpenMemberTable = {
+                            indexState.flush()
+                            route = "member"
+                        },
+                        onOpenAlarmSettings = {
+                            indexState.flush()
+                            route = "alarmSettings"
+                        }
+                    )
+                }
             }
 
             AnimatedVisibility(

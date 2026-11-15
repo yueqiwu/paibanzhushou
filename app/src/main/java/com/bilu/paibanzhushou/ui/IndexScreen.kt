@@ -129,26 +129,6 @@ fun IndexScreen(
     val canSwipe = !dragging && !pickerVisible && state.people.size > 1
     val currentPerson = state.people.firstOrNull { it.id == state.activePersonId }
 
-    // 切人特效：新内容淡入 + 轻微上浮，跟日历的滑动衔接成一次完整的转场。
-    // 首次进入（activePersonId 从空变成真实 id）不做动画，否则开屏会整块发灰。
-    var shownPersonId by remember { mutableStateOf(state.activePersonId) }
-    val personAnim = remember { Animatable(1f) }
-    LaunchedEffect(state.activePersonId) {
-        if (state.activePersonId == shownPersonId) {
-            // 上一轮动画可能被后续重组打断，这里兜底拉回不透明
-            if (personAnim.value < 1f) personAnim.animateTo(1f, tween(160))
-            return@LaunchedEffect
-        }
-        val animate = shownPersonId.isNotEmpty()
-        shownPersonId = state.activePersonId
-        if (!animate) {
-            personAnim.snapTo(1f)
-            return@LaunchedEffect
-        }
-        personAnim.snapTo(0f)
-        personAnim.animateTo(1f, tween(240))
-    }
-
     BoxWithConstraints(Modifier.fillMaxSize().background(C.pageBg)) {
         val widthPx = with(density) { maxWidth.toPx() }
         PageBackground()
@@ -173,17 +153,7 @@ fun IndexScreen(
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
             Spacer(Modifier.height(Rpx.dp(8)))
 
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .graphicsLayer {
-                        val t = personAnim.value
-                        alpha = 0.45f + 0.55f * t
-                        translationY = (1f - t) * Rpx.dp(12).toPx()
-                        scaleX = 0.992f + 0.008f * t
-                        scaleY = scaleX
-                    }
-            ) {
+            Column(Modifier.fillMaxWidth()) {
                 HeroCard(state, onOpenAlarmSettings)
                 ConfigCard(state, swipe, widthPx) { confettiOrigin = it }
             }

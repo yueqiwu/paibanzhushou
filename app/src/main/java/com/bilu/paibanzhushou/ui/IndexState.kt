@@ -92,7 +92,6 @@ class IndexState(
         const val PERM_EXACT = "exact"
         const val PERM_OVERLAY = "overlay"
         const val PERM_FSI = "fsi"
-        const val PERM_DND = "dnd"
     }
 
     val dragController = DragSortController()
@@ -926,12 +925,6 @@ class IndexState(
                     desc = "锁屏时自动亮屏显示响铃页（部分机型叫「锁屏显示」）",
                     ok = AlarmNotifications.canUseFullScreen(context)
                 ),
-                AlarmPermission(
-                    id = PERM_DND,
-                    title = "勿扰 / 睡眠模式例外",
-                    desc = "手机或手表开了勿扰、睡眠模式时，闹钟仍按闹钟音量响铃",
-                    ok = AlarmNotifications.canBypassDnd(context)
-                )
             )
         }
 
@@ -965,11 +958,6 @@ class IndexState(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg)
                 } else null,
-                app
-            )
-            // 勿扰访问是「整机一份」的授权页，没有 package 参数
-            PERM_DND -> listOf(
-                Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS),
                 app
             )
             else -> listOf(app)
