@@ -21,6 +21,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -55,14 +56,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas as GfxCanvas
@@ -73,6 +77,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
@@ -95,6 +100,7 @@ import androidx.core.content.ContextCompat
 import com.bilu.paibanzhushou.R
 import com.bilu.paibanzhushou.core.Dates
 import com.bilu.paibanzhushou.core.Schedule
+import com.bilu.paibanzhushou.data.Person
 import android.Manifest
 import kotlin.math.roundToInt
 
@@ -106,21 +112,36 @@ import kotlin.math.roundToInt
 fun IndexScreen(
     state: IndexState,
     onOpenMemberTable: () -> Unit,
-    onOpenAlarmList: () -> Unit
+    onOpenAlarmSettings: () -> Unit
 ) {
     val scrollState = rememberScrollState()
     var confettiOrigin by remember { mutableStateOf(Offset.Zero) }
-    var showAlarmTime by remember { mutableStateOf(false) }
-    var showRingtone by remember { mutableStateOf(false) }
+    val swipeScope = rememberCoroutineScope()
+    val swipe = remember { PersonSwipeState(swipeScope) }
+    var calendarBounds by remember { mutableStateOf<Rect?>(null) }
+    val density = LocalDensity.current
     val dragging = state.dragController.dragging
+    val pickerVisible = state.picker.visible
+    val canSwipe = !dragging && !pickerVisible && state.people.size > 1
+    val currentPerson = state.people.firstOrNull { it.id == state.activePersonId }
 
-    Box(Modifier.fillMaxSize().background(C.pageBg)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(C.pageBg)) {
+        val widthPx = with(density) { maxWidth.toPx() }
         PageBackground()
 
         Column(
             Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState, enabled = !dragging)
+                // 整页左右滑动切人：挂在最外层，日历区域与其它横向滚动区在 handle 内部被排除
+                .personSwipeSwitch(
+                    state = state,
+                    swipe = swipe,
+                    widthPx = { widthPx },
+                    calendarBounds = { calendarBounds },
+                    enabled = { canSwipe },
+                    onSwitch = { person -> state.setActivePerson(person.id) }
+                )
+                .verticalScroll(scrollState, enabled = !dragging && !swipe.swiping)
                 .imePadding()
         ) {
             // 源版从页面顶部留 100rpx（含状态栏）；这里改成「状态栏高度 + 8rpx」，把省下来的
@@ -128,15 +149,16 @@ fun IndexScreen(
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
             Spacer(Modifier.height(Rpx.dp(8)))
 
-            HeroCard(state)
-            ConfigCard(
-                state,
-                onConfettiOrigin = { confettiOrigin = it },
-                onPickAlarmTime = { showAlarmTime = true },
-                onPickRingtone = { showRingtone = true },
-                onOpenAlarmList = onOpenAlarmList
+            HeroCard(state, onOpenAlarmSettings)
+            ConfigCard(state, onConfettiOrigin = { confettiOrigin = it })
+            SwipeableCalendar(
+                state = state,
+                swipe = swipe,
+                currentPerson = currentPerson,
+                widthPx = widthPx,
+                onOpenMemberTable = onOpenMemberTable,
+                onBounds = { calendarBounds = it }
             )
-            CalendarSection(state = state, onOpenMemberTable = onOpenMemberTable)
             CopyrightFooter(state)
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
@@ -144,27 +166,70 @@ fun IndexScreen(
         DragOverlay(state)
         ConfettiOverlay(confettiOrigin, state.confettiPieces, state.confettiKey, state.confettiVisible)
         BanPickerSheet(state)
-        AlarmTimePickerSheet(
-            show = showAlarmTime,
-            hour = state.alarmConfig.hour,
-            minute = state.alarmConfig.minute,
-            onDismiss = { showAlarmTime = false },
-            onPick = { h, m ->
-                showAlarmTime = false
-                state.setAlarmTime(h, m)
-            }
-        )
-        RingtonePickerSheet(
-            show = showRingtone,
-            current = state.alarmConfig.ringtone,
-            onDismiss = { showRingtone = false },
-            onPick = { value ->
-                showRingtone = false
-                state.setAlarmRingtone(value)
-            }
-        )
         state.confirm?.let { c ->
             ConfirmDialog(c) { state.confirm = null }
+        }
+    }
+}
+
+/**
+ * 日历区块（标题 + 图例 + 月历）整体跟着手指横移，并在旁边摆一张「相邻人员」的日历预览。
+ *
+ * 只有这一块会动（对齐源版 .person-swipe-track），标题卡与设置卡固定不动；
+ * 预览页 interactive = false（不建 pager、不响应点击），拖动时几乎不增加绘制成本。
+ */
+@Composable
+private fun SwipeableCalendar(
+    state: IndexState,
+    swipe: PersonSwipeState,
+    currentPerson: Person?,
+    widthPx: Float,
+    onOpenMemberTable: () -> Unit,
+    onBounds: (Rect) -> Unit
+) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clipToBounds()
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .graphicsLayer { translationX = swipe.offset }
+                .onGloballyPositioned {
+                    // 只在静止时记录位置：拖动中采到的是平移后的位置，会把日历判定区带偏
+                    if (swipe.offset == 0f) onBounds(it.boundsInRoot())
+                }
+        ) {
+            // CalendarSection 会发出两个并列的布局节点（标题列 + 日历卡），这里必须用 Column 包一层，
+            // 直接塞进 Box 会让标题和图例被日历卡盖住
+            Column(Modifier.fillMaxWidth()) {
+                CalendarSection(
+                    state = state,
+                    onOpenMemberTable = onOpenMemberTable,
+                    person = currentPerson,
+                    interactive = true
+                )
+            }
+        }
+        val peek = swipe.peekPerson
+        if (peek != null) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        translationX = swipe.offset + swipe.peekSign * widthPx
+                    }
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    CalendarSection(
+                        state = state,
+                        onOpenMemberTable = {},
+                        person = peek,
+                        interactive = false
+                    )
+                }
+            }
         }
     }
 }
@@ -233,7 +298,7 @@ private fun renderBackdropBitmap(w: Int, h: Int, density: Density): ImageBitmap 
 /* ---------------- 顶部标题卡 ---------------- */
 
 @Composable
-private fun HeroCard(state: IndexState) {
+private fun HeroCard(state: IndexState, onOpenAlarmSettings: () -> Unit) {
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -262,7 +327,7 @@ private fun HeroCard(state: IndexState) {
                 contentScale = ContentScale.Crop
             )
         }
-        Column(Modifier.padding(start = Rpx.dp(18))) {
+        Column(Modifier.padding(start = Rpx.dp(18)).weight(1f)) {
             Text(
                 text = "班表小历",
                 fontSize = Rpx.sp(30),
@@ -279,6 +344,89 @@ private fun HeroCard(state: IndexState) {
                 modifier = Modifier.padding(top = Rpx.dp(2))
             )
         }
+        AlarmTopButton(state = state, onClick = onOpenAlarmSettings)
+        }
+    }
+}
+
+/* ---------------- 顶部闹钟入口 ---------------- */
+
+/**
+ * 顶部栏右侧的闹钟按钮：闹钟相关的全部设置与权限都收进了这个入口（AlarmSettingsScreen）。
+ * 播放态用蓝底 + 蓝图标，关闭态用灰底 + 灰图标；有未授予的权限时右上角一个红点。
+ */
+@Composable
+private fun AlarmTopButton(state: IndexState, onClick: () -> Unit) {
+    val enabled = state.alarmConfig.enabled
+    val missing = state.alarmPermissions.count { !it.ok }
+    val fg = if (enabled) C.blue else Color(0xFF5B6B7F)
+    Box(
+        Modifier
+            .size(Rpx.dp(60))
+            .clip(RoundedCornerShape(Rpx.dp(18)))
+            .background(if (enabled) Color(0x1A4A90E2) else Color(0x0F000000))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.size(Rpx.dp(32))) {
+            val stroke = size.minDimension * 0.085f
+            val cy = size.height * 0.56f
+            val r = size.minDimension * 0.30f
+            // 表盘
+            drawCircle(
+                color = fg,
+                radius = r,
+                center = center.copy(y = cy),
+                style = Stroke(width = stroke)
+            )
+            // 两只铃铛
+            drawLine(
+                color = fg,
+                start = Offset(size.width * 0.18f, size.height * 0.30f),
+                end = Offset(size.width * 0.30f, size.height * 0.20f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = fg,
+                start = Offset(size.width * 0.82f, size.height * 0.30f),
+                end = Offset(size.width * 0.70f, size.height * 0.20f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+            // 指针
+            drawLine(
+                color = fg,
+                start = Offset(center.x, cy),
+                end = Offset(center.x, cy - r * 0.52f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = fg,
+                start = Offset(center.x, cy),
+                end = Offset(center.x + r * 0.46f, cy + r * 0.12f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+            // 底座
+            drawLine(
+                color = fg,
+                start = Offset(size.width * 0.32f, size.height * 0.93f),
+                end = Offset(size.width * 0.68f, size.height * 0.93f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+        }
+        if (missing > 0) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = Rpx.dp(4), end = Rpx.dp(4))
+                    .size(Rpx.dp(14))
+                    .background(Color(0xFFE53935), CircleShape)
+                    .border(Rpx.dp(2), Color.White, CircleShape)
+            )
         }
     }
 }
@@ -289,10 +437,7 @@ private fun HeroCard(state: IndexState) {
 @Composable
 private fun ConfigCard(
     state: IndexState,
-    onConfettiOrigin: (Offset) -> Unit,
-    onPickAlarmTime: () -> Unit,
-    onPickRingtone: () -> Unit,
-    onOpenAlarmList: () -> Unit
+    onConfettiOrigin: (Offset) -> Unit
 ) {
     GlassCard(
         modifier = Modifier
@@ -327,24 +472,6 @@ private fun ConfigCard(
             } else {
                 Spacer(Modifier.weight(1f))
             }
-            // 收起状态下也能看到「缺 N 项权限」，点一下直接跳到缺的那个系统设置页
-            val missing = state.alarmPermissions.filter { !it.ok }
-            if (missing.isNotEmpty()) {
-                Box(
-                    Modifier
-                        .padding(end = Rpx.dp(12))
-                        .background(Color(0x14E53935), RoundedCornerShape(999.dp))
-                        .border(Rpx.dp(1), Color(0x40E53935), RoundedCornerShape(999.dp))
-                        .clickable { state.openAlarmPermission(missing.first().id) }
-                        .padding(horizontal = Rpx.dp(14), vertical = Rpx.dp(6))
-                ) {
-                    Text(
-                        text = "缺 " + missing.size + " 项权限",
-                        fontSize = Rpx.sp(22),
-                        color = Color(0xFFE53935)
-                    )
-                }
-            }
             Box(
                 Modifier
                     .background(Color(0x144A90E2), RoundedCornerShape(999.dp))
@@ -368,7 +495,7 @@ private fun ConfigCard(
             exit = shrinkVertically(tween(280)) + fadeOut(tween(200))
         ) {
             Column(Modifier.fillMaxWidth()) {
-                ConfigBody(state, onConfettiOrigin, onPickAlarmTime, onPickRingtone, onOpenAlarmList)
+                ConfigBody(state, onConfettiOrigin)
             }
         }
     }
@@ -465,10 +592,7 @@ private fun PeopleTabs(state: IndexState) {
 @Composable
 private fun ConfigBody(
     state: IndexState,
-    onConfettiOrigin: (Offset) -> Unit,
-    onPickAlarmTime: () -> Unit,
-    onPickRingtone: () -> Unit,
-    onOpenAlarmList: () -> Unit
+    onConfettiOrigin: (Offset) -> Unit
 ) {
     val nameFocus = remember { FocusRequester() }
     var showAnchorPicker by remember { mutableStateOf(false) }
@@ -609,8 +733,6 @@ private fun ConfigBody(
                 modifier = Modifier.padding(top = Rpx.dp(10))
             )
         }
-
-        AlarmSection(state, onPickAlarmTime, onPickRingtone, onOpenAlarmList)
 
         // 保存并生成
         Row(
@@ -786,255 +908,6 @@ private fun RestSettingRow(
     }
 }
 
-/**
- * 闹钟提醒：选班次 + 选时间 + 开关。
- * 打开后按「未来 60 天里命中这些班次的日子」写系统闹钟（AlarmClockInfo），
- * 排班一改就自动重写，重启后由 BootReceiver 恢复。
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun AlarmSection(
-    state: IndexState,
-    onPickAlarmTime: () -> Unit,
-    onPickRingtone: () -> Unit,
-    onOpenAlarmList: () -> Unit
-) {
-    val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        state.setAlarmEnabled(true)
-        if (!granted) state.toastMsg("没给通知权限，闹钟到点可能弹不出来")
-    }
-
-    val choices = state.banOptions.filter { it != Schedule.REST_BAN }
-    if (choices.isEmpty()) return
-
-    SectionLabel("闹钟提醒", topMargin = Rpx.dp(28))
-
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(top = Rpx.dp(14)),
-        horizontalArrangement = Arrangement.spacedBy(Rpx.dp(12)),
-        verticalArrangement = Arrangement.spacedBy(Rpx.dp(12))
-    ) {
-        choices.forEach { ban ->
-            val active = state.alarmConfig.bans.contains(ban)
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(if (active) Color(0x1A4A90E2) else C.fieldBg)
-                    .border(
-                        Rpx.dp(1),
-                        if (active) Color(0x664A90E2) else Color(0x0D000000),
-                        RoundedCornerShape(999.dp)
-                    )
-                    .clickable { state.toggleAlarmBan(ban) }
-                    .padding(horizontal = Rpx.dp(18), vertical = Rpx.dp(8)),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier
-                        .size(Rpx.dp(16))
-                        .background(hexColor(state.banColor(ban)), CircleShape)
-                )
-                Text(
-                    text = ban,
-                    fontSize = Rpx.sp(24),
-                    color = if (active) Color(0xFF2B6CB0) else Color(0xFF333333),
-                    modifier = Modifier.padding(start = Rpx.dp(8))
-                )
-            }
-        }
-    }
-
-    Row(
-        Modifier.fillMaxWidth().padding(top = Rpx.dp(18)),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("响铃时间", fontSize = Rpx.sp(26), color = C.textLabel)
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            Box(
-                Modifier
-                    .background(C.fieldBg, RoundedCornerShape(Rpx.dp(16)))
-                    .border(Rpx.dp(1), Color(0x0A000000), RoundedCornerShape(Rpx.dp(16)))
-                    .clickable { onPickAlarmTime() }
-                    .padding(horizontal = Rpx.dp(20))
-                    .height(Rpx.dp(64)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    state.alarmConfig.timeText,
-                    fontSize = Rpx.sp(26),
-                    color = Color(0xFF111111)
-                )
-            }
-        }
-    }
-
-    Row(
-        Modifier.fillMaxWidth().padding(top = Rpx.dp(18)),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("闹钟铃声", fontSize = Rpx.sp(26), color = C.textLabel)
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            Box(
-                Modifier
-                    .background(C.fieldBg, RoundedCornerShape(Rpx.dp(16)))
-                    .border(Rpx.dp(1), Color(0x0A000000), RoundedCornerShape(Rpx.dp(16)))
-                    .clickable { onPickRingtone() }
-                    .padding(horizontal = Rpx.dp(20))
-                    .height(Rpx.dp(64)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = com.bilu.paibanzhushou.data.AlarmRingtones.label(
-                        context,
-                        state.alarmConfig.ringtone
-                    ),
-                    fontSize = Rpx.sp(24),
-                    color = Color(0xFF111111),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-
-    Row(
-        Modifier.fillMaxWidth().padding(top = Rpx.dp(10)),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("自动写入系统闹钟", fontSize = Rpx.sp(26), color = C.textLabel)
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            Switch(
-                checked = state.alarmConfig.enabled,
-                onCheckedChange = { checked ->
-                    if (!checked) {
-                        state.setAlarmEnabled(false)
-                    } else if (
-                        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-                        ContextCompat.checkSelfPermission(
-                            context, Manifest.permission.POST_NOTIFICATIONS
-                        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-                    ) {
-                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        state.setAlarmEnabled(true)
-                    }
-                },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = C.blue
-                )
-            )
-        }
-    }
-
-    Text(
-        text = if (state.alarmConfig.enabled) {
-            "已写入 " + state.alarmCount + " 个闹钟（未来 " + state.alarmConfig.horizonDays + " 天）；改排班会自动重写"
-        } else {
-            "开启后把未来 " + state.alarmConfig.horizonDays + " 天里这些班次的日子写成系统闹钟"
-        },
-        fontSize = Rpx.sp(22),
-        color = C.hint,
-        lineHeight = Rpx.sp(34),
-        modifier = Modifier.padding(top = Rpx.dp(10))
-    )
-
-    if (state.alarmConfig.enabled) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = Rpx.dp(12))
-                .clip(RoundedCornerShape(Rpx.dp(14)))
-                .background(Color(0x0A4A90E2))
-                .clickable { onOpenAlarmList() }
-                .padding(horizontal = Rpx.dp(18), vertical = Rpx.dp(16))
-        ) {
-            Text(
-                text = "查看闹钟列表，可单独取消某一天",
-                fontSize = Rpx.sp(23),
-                color = C.blue,
-                modifier = Modifier.weight(1f)
-            )
-            Text(text = "›", fontSize = Rpx.sp(30), color = C.blue)
-        }
-    }
-
-    // 闹钟依赖的系统权限：逐条列出来，缺的可以一键跳设置页
-    val perms = state.alarmPermissions
-    val missing = perms.count { !it.ok }
-    SectionLabel("闹钟权限", topMargin = Rpx.dp(28))
-    Text(
-        text = "下面这些开关决定闹钟能不能准点响、能不能亮屏弹出响铃页",
-        fontSize = Rpx.sp(22),
-        color = C.hint,
-        lineHeight = Rpx.sp(32),
-        modifier = Modifier.padding(top = Rpx.dp(8))
-    )
-    Text(
-        text = if (missing == 0) "全部已开启，闹钟可以正常响" else "还有 " + missing + " 项没开启",
-        fontSize = Rpx.sp(22),
-        color = if (missing == 0) Color(0xFF43A047) else Color(0xFFE53935),
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(top = Rpx.dp(8))
-    )
-    perms.forEach { perm ->
-        AlarmPermissionRow(perm) { state.openAlarmPermission(perm.id) }
-    }
-}
-
-/** 一项闹钟权限：标题 + 说明 + 「已开启 / 去设置」 */
-@Composable
-private fun AlarmPermissionRow(perm: AlarmPermission, onOpen: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = Rpx.dp(12))
-            .clip(RoundedCornerShape(Rpx.dp(16)))
-            .background(Color(0x08000000))
-            .padding(horizontal = Rpx.dp(16), vertical = Rpx.dp(14)),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = perm.title,
-                fontSize = Rpx.sp(24),
-                color = Color(0xFF333333),
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = perm.desc,
-                fontSize = Rpx.sp(21),
-                color = C.hint,
-                lineHeight = Rpx.sp(30),
-                modifier = Modifier.padding(top = Rpx.dp(4))
-            )
-        }
-        if (perm.ok) {
-            Text(
-                text = "已开启",
-                fontSize = Rpx.sp(22),
-                color = Color(0xFF43A047),
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(start = Rpx.dp(12))
-            )
-        } else {
-            Box(
-                Modifier
-                    .padding(start = Rpx.dp(12))
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(C.blue)
-                    .clickable { onOpen() }
-                    .padding(horizontal = Rpx.dp(18), vertical = Rpx.dp(9))
-            ) {
-                Text("去设置", fontSize = Rpx.sp(22), color = Color.White)
-            }
-        }
-    }
-}
 
 /* ---------------- 版权 ---------------- */
 

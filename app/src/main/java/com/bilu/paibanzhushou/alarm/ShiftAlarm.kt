@@ -109,10 +109,10 @@ object ShiftAlarm {
             if (ok) written.add(k)
         }
         Store.writeRaw(WRITTEN_KEY, JSONArray(written).toString())
-        // 常驻前台服务：ColorOS 会把「后台闲置」应用的精确闹钟整体延后约 3 天，
-        // 前台服务让本应用不进入闲置状态，闹钟才能准点触发。
-        if (written.isNotEmpty()) AlarmKeepAliveService.start(context, written.size)
-        else AlarmKeepAliveService.stop(context)
+        // 这里不再拉起常驻前台服务：ColorOS 会把「后台闲置」应用的精确闹钟整体延后约 3 天，
+        // 但常驻通知会一直挂在通知栏（撤掉后 START_STICKY 还会自己重启再发一条），
+        // 用户明确要求「平时不要通知」。改用 setAlarmClock 本身（系统闹钟语义，免 Doze 延后）
+        // + AlarmRingService 到点才起前台服务的方式，只在响铃那一刻占用通知栏。
         return written.size
     }
 
@@ -162,7 +162,6 @@ object ShiftAlarm {
         Store.writeRaw(WRITTEN_KEY, JSONArray(rest).toString())
         val skip = skippedKeys(context).toMutableSet().apply { add(key(date, ban)) }
         Store.writeRaw(SKIP_KEY, JSONArray(skip.toList()).toString())
-        if (rest.isEmpty()) AlarmKeepAliveService.stop(context)
     }
 
     /** 撤销「手动取消」，让它回到正常排班闹钟里 */
@@ -181,7 +180,6 @@ object ShiftAlarm {
         val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         if (am != null) runCatching { am.cancel(snoozeIntent(context, "", "")) }
         Store.writeRaw(WRITTEN_KEY, "[]")
-        AlarmKeepAliveService.stop(context)
     }
 
     /**

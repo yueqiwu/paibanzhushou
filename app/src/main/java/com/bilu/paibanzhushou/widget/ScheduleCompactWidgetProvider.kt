@@ -16,7 +16,8 @@ import com.bilu.paibanzhushou.core.BanColors
  * 桌面小组件（小号）：2×1 卡片，一行标题 + 7 个日号圆圈。
  *
  * 与 4×2 大卡（[ScheduleWidgetProvider]）相比，这里把「星期 + 日号 + 班次文字」
- * 压成一个圆圈：圆内是日号、圆底是当天的班次色，今天额外套一圈柔和蓝色光晕。
+ * 压成一个圆圈：圆内是日号、圆底是当天的班次色，今天只是「日号文字换成主题蓝」，
+ * 不再额外套一圈描边（描边会让今天看起来比别的日子大一圈，和列表视觉不统一）。
  * 这样 2×1 的窄条也能一眼看完「今天起 7 天上什么班」。
  *
  * 班次色块同样用预置 drawable（RemoteViews 的 setBackgroundColor 会抹掉圆形，
@@ -65,23 +66,6 @@ class ScheduleCompactWidgetProvider : AppWidgetProvider() {
             "6D4C41" to R.drawable.circle_6d4c41
         )
 
-        /** 今天用的「带深色描边」版本，保证保留班次色同时能看出是今天 */
-        private val CIRCLES_TODAY = mapOf(
-            "4A90E2" to R.drawable.circle_today_4a90e2,
-            "6AC695" to R.drawable.circle_today_6ac695,
-            "D81B60" to R.drawable.circle_today_d81b60,
-            "9C27B0" to R.drawable.circle_today_9c27b0,
-            "FFD166" to R.drawable.circle_today_ffd166,
-            "E53935" to R.drawable.circle_today_e53935,
-            "FB8C00" to R.drawable.circle_today_fb8c00,
-            "F9A825" to R.drawable.circle_today_f9a825,
-            "C0CA33" to R.drawable.circle_today_c0ca33,
-            "43A047" to R.drawable.circle_today_43a047,
-            "00897B" to R.drawable.circle_today_00897b,
-            "00ACC1" to R.drawable.circle_today_00acc1,
-            "3949AB" to R.drawable.circle_today_3949ab,
-            "6D4C41" to R.drawable.circle_today_6d4c41
-        )
 
         fun refresh(context: Context) {
             runCatching {
@@ -130,13 +114,8 @@ class ScheduleCompactWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(BAN_IDS[i], day.ban)
                 val ban = day.ban
                 val hex = if (ban.isBlank()) "" else hexOf(ban)
-                val bg = if (hex.isBlank()) {
-                    R.drawable.circle_none
-                } else if (i == 0) {
-                    CIRCLES_TODAY[hex] ?: R.drawable.circle_none
-                } else {
-                    CIRCLES[hex] ?: R.drawable.circle_none
-                }
+                // 今天和其它日子用同一套圆底：今天不加描边圈，靠下面的蓝色日号/班次名区分
+                val bg = if (hex.isBlank()) R.drawable.circle_none else CIRCLES[hex] ?: R.drawable.circle_none
                 // 文字色只作用于日号；班次名固定深灰，浅色圆底上也能看清
                 
                 views.setInt(DATE_IDS[i], "setBackgroundResource", bg)

@@ -156,6 +156,9 @@ class IndexState(
     /** 按「月」缓存的排班窗口（key = 版本号#月首），滑动时同一页只算一次 */
     private val windowCache = HashMap<String, Map<String, SelectedEntry>>()
 
+    /** 非当前人员（左侧/右侧预览页）的窗口缓存，key = 版本号#人员 id#月首 */
+    private val personWindowCache = HashMap<String, Map<String, SelectedEntry>>()
+
     // 日历
     var calendarDateMs by mutableStateOf(Dates.todayStart())
         private set
@@ -419,6 +422,7 @@ class IndexState(
         scheduleSave()
         scheduleVersion++
         windowCache.clear()
+        personWindowCache.clear()
         refreshTodayShift()
         // 排班一变，闹钟对应的工作日也变了，跟着重写（开关没开就什么都不做）
         if (alarmConfig.enabled) resyncAlarms()
@@ -476,6 +480,42 @@ class IndexState(
         // 翻很多年时缓存会一直长，简单粗暴地整块丢弃即可（重算一页只要百来天，可忽略）
         if (windowCache.size > 120) windowCache.clear()
         windowCache[key] = map
+        return map
+    }
+
+    /**
+     * 左右滑动切换人员时，预览页要用「另一个人员」的班次数据。
+     * [person] 为空或就是当前人员时走原来的 [windowedSelected]（用表单态，包含还没保存的编辑）。
+     */
+    fun windowedEntries(person: Person?, monthMs: Long): Map<String, SelectedEntry> {
+        if (person == null || person.id == activePersonId) return windowedSelected(monthMs)
+        return windowedSelectedFor(person, monthMs)
+    }
+
+    /** 指定人员在某月 ±2 个月窗口内的班次（结果按版本号 + 人员 + 月份缓存） */
+    private fun windowedSelectedFor(person: Person, monthMs: Long): Map<String, SelectedEntry> {
+        val monthFirst = Dates.firstOfMonth(monthMs)
+        val key = scheduleVersion.toString() + "#" + person.id + "#" + monthFirst
+        personWindowCache[key]?.let { return it }
+
+        val startMs = Dates.addMonths(monthFirst, -2)
+        val endMs = Dates.monthEndMs(Dates.addMonths(monthFirst, 2))
+        val map = Schedule.toMap(
+            Schedule.buildSchedule(
+                cycleBans = person.cycleBans,
+                anchorDate = person.anchorDate,
+                startMs = startMs,
+                endMs = endMs,
+                holiday = holiday,
+                banList = banList,
+                overrides = person.overrides,
+                weekendRestBans = person.weekendRestBans,
+                holidayRestBans = person.holidayRestBans,
+                fallbackAnchorMs = monthFirst
+            )
+        )
+        if (personWindowCache.size > 60) personWindowCache.clear()
+        personWindowCache[key] = map
         return map
     }
 

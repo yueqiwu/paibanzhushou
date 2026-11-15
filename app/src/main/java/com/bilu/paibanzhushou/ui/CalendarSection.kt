@@ -70,6 +70,7 @@ import com.bilu.paibanzhushou.core.Dates
 import com.bilu.paibanzhushou.core.Lunar
 import com.bilu.paibanzhushou.core.SelectedEntry
 import com.bilu.paibanzhushou.core.Schedule
+import com.bilu.paibanzhushou.data.Person
 import kotlinx.coroutines.launch
 
 private val CAL_THEME = Color(0xFF3C9CFF)
@@ -80,7 +81,12 @@ private val WEEK_NAMES = listOf("日", "一", "二", "三", "四", "五", "六")
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun CalendarSection(state: IndexState, onOpenMemberTable: () -> Unit) {
+fun CalendarSection(
+    state: IndexState,
+    onOpenMemberTable: () -> Unit,
+    person: Person? = null,
+    interactive: Boolean = true
+) {
     Column(Modifier.fillMaxWidth().padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(16))) {
         Row(
             Modifier.fillMaxWidth(),
@@ -96,7 +102,7 @@ fun CalendarSection(state: IndexState, onOpenMemberTable: () -> Unit) {
                 textColor = C.blue,
                 bgColor = Color(0xD9FFFFFF),
                 borderColor = Color(0x664A90E2),
-                onClick = onOpenMemberTable
+                onClick = { if (interactive) onOpenMemberTable() }
             )
         }
         Text(
@@ -132,9 +138,10 @@ fun CalendarSection(state: IndexState, onOpenMemberTable: () -> Unit) {
         bgAlpha = 0.66f,
         contentPadding = PaddingValues(Rpx.dp(8))
     ) {
-        CalendarGrid(state)
+        CalendarGrid(state = state, person = person, interactive = interactive)
     }
 }
+
 
 /**
  * 图例胶囊：色点款与标签款共用同一容器与行高，保证「白班/中班…」与「假 节假日 / 班 调班」垂直对齐。
@@ -205,23 +212,33 @@ private fun LegendText(name: String) {
  * 月历本体，对应 uni_modules/wu-calendar。
  */
 /**
- * 日历一行高度：源 wu-calendar itemHeight = 70px（1:1 用 dp）。
- * 首屏要塞下整月（6 行）+ 页脚，所以在矮屏上用 56dp 左右；屏幕越高越把富余高度还给日历，
- * 免得底部留一大块空白。
+ * 日历一行高度。
+ *
+ * 目标（用户需求）：6.1 英寸这类「一屏刚好」的机型上，整月 6 行 + 页脚必须一屏放下、不能上下滑；
+ * 更小的屏允许上下滑，行高就按剩余空间继续压缩（下限 44dp，再小就靠滚动兜底）。
+ *
+ * 做法：除日历 6 行以外的所有内容（标题卡 / 设置卡 / 日历头 / 星期行 / 页脚 / 间距）
+ * 基本都是 rpx，折算成 dp 就是 `CHROME_RPX * Rpx.scale`；实测系数 ≈ 737（设计宽 750 的 rpx 口径）。
+ * 再预留 24dp 给底部手势条/导航条，剩下的高度平摊给 6 行。
+ * 上限 66dp 与源版 wu-calendar 的 itemHeight 一致，避免大屏把日历撑得过分空旷。
  */
 @Composable
 private fun calendarRowHeight(): Dp {
     val screenH = LocalConfiguration.current.screenHeightDp
-    // 800dp 高的屏约 70dp/行（与源 itemHeight 一致），更矮的屏自动收紧，保证整月 + 页脚一屏放下
-    return (screenH * 0.0800f).coerceIn(54f, 66f).dp
+    val chrome = CHROME_RPX * Rpx.scale + 24f
+    val fit = (screenH - chrome) / 6f
+    return fit.coerceIn(44f, 66f).dp
 }
+
+/** 日历以外的固定高度（rpx 口径，见 [calendarRowHeight]） */
+private const val CHROME_RPX = 737f
 
 /** 虚拟无限 Pager：中间页 + 总页数（页索引保持在数千量级，避免超长偏移的精度问题） */
 private const val PAGER_MIDDLE = 6000
 private const val PAGER_COUNT = 12001
 
 @Composable
-private fun CalendarGrid(state: IndexState) {
+private fun CalendarGrid(state: IndexState, person: Person? = null, interactive: Boolean = true) {
     var showMonthPicker by remember { mutableStateOf(false) }
     val monthFirst = state.calendarMonthMs
     val rowHeight = calendarRowHeight()
@@ -235,12 +252,18 @@ private fun CalendarGrid(state: IndexState) {
     Column(Modifier.fillMaxWidth()) {
         // 展开 / 折叠会把「一页」的含义从月换成周：用 key 重建 pager，基准页直接落在当前视野上
         key(state.foldOpen) {
-            CalendarPager(
-                state = state,
-                monthFirst = monthFirst,
-                containerHeight = containerHeight,
-                onOpenMonthPicker = { showMonthPicker = true }
-            )
+            if (interactive) {
+                CalendarPager(
+                    state = state,
+                    person = person,
+                    monthFirst = monthFirst,
+                    containerHeight = containerHeight,
+                    interactive = true,
+                    onOpenMonthPicker = { showMonthPicker = true }
+                )
+            } else {
+                CalendarPeekPage(state = state, person = person, containerHeight = containerHeight)
+            }
         }
         // 折叠
         Box(
@@ -280,8 +303,10 @@ private fun CalendarGrid(state: IndexState) {
 @Composable
 private fun CalendarPager(
     state: IndexState,
+    person: Person?,
     monthFirst: Long,
     containerHeight: Dp,
+    interactive: Boolean,
     onOpenMonthPicker: () -> Unit
 ) {
     // true = 整月，false = 单周（沿开源版 foldOpen 语义）
@@ -314,95 +339,33 @@ private fun CalendarPager(
     }
     // pager -> 视野：落位后写回 state（绝不碰选中日）
     LaunchedEffect(pagerState.settledPage, expandMonth) {
+        if (!interactive) return@LaunchedEffect
         val page = pagerState.settledPage
         if (expandMonth) state.browseToMonth(monthOfPage(page)) else state.browseToWeek(weekStartOfPage(page))
     }
 
-    val titleYear = Dates.year(monthFirst)
-    val titleMonth = Dates.month(monthFirst)
-    val todayStr = state.todayStr
-    val selectedMs = Dates.startOfDay(state.calendarDateMs)
-    val selectedStr = Dates.formatYmd(selectedMs)
-
     Column(Modifier.fillMaxWidth()) {
-        // 头部
-        Box(Modifier.fillMaxWidth().height(Rpx.dp(76))) {
-            Row(
-                Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Box(
-                    Modifier.width(Rpx.dp(90)).height(Rpx.dp(76)).clickable {
-                        scope.launch {
-                            pagerState.animateScrollToPage(pagerState.currentPage - 1, animationSpec = tween(300))
-                        }
-                    },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Chevron(dir = ChevronDir.LEFT, color = Color(0xFF555555), size = Rpx.dp(18))
+        CalendarHeader(
+            monthFirst = monthFirst,
+            interactive = interactive,
+            onPrev = {
+                if (interactive) {
+                    scope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage - 1, animationSpec = tween(300))
+                    }
                 }
-                Box(
-                    Modifier
-                        .width(Rpx.dp(200))
-                        .height(Rpx.dp(76))
-                        .clickable { onOpenMonthPicker() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = titleYear.toString() + "年" + titleMonth.toString() + "月",
-                        fontSize = Rpx.sp(32),
-                        color = Color(0xFF333333),
-                        textAlign = TextAlign.Center
-                    )
+            },
+            onNext = {
+                if (interactive) {
+                    scope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage + 1, animationSpec = tween(300))
+                    }
                 }
-                Box(
-                    Modifier.width(Rpx.dp(90)).height(Rpx.dp(76)).clickable {
-                        scope.launch {
-                            pagerState.animateScrollToPage(pagerState.currentPage + 1, animationSpec = tween(300))
-                        }
-                    },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Chevron(dir = ChevronDir.RIGHT, color = Color(0xFF555555), size = Rpx.dp(18))
-                }
-            }
-            // 今天
-            Box(
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .height(Rpx.dp(50))
-                    .background(
-                        Color(0xFFF1F1F1),
-                        RoundedCornerShape(topStart = Rpx.dp(50), bottomStart = Rpx.dp(50))
-                    )
-                    .clickable { state.backToToday() }
-                    .padding(start = Rpx.dp(20), end = Rpx.dp(10)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("今天", fontSize = Rpx.sp(24), color = Color(0xFF333333))
-            }
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(Rpx.dp(2))
-                    .background(Color(0xFFEDEDED))
-            )
-        }
-
-        // 星期行
-        Row(Modifier.fillMaxWidth().padding(horizontal = Rpx.dp(8))) {
-            WEEK_NAMES.forEach { name ->
-                Box(
-                    Modifier.weight(1f).height(Rpx.dp(62)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(name, fontSize = Rpx.sp(28), color = Color(0xFF333333))
-                }
-            }
-        }
-        Box(Modifier.fillMaxWidth().height(Rpx.dp(2)).background(Color(0xFFF5F5F5)))
+            },
+            onPickMonth = onOpenMonthPicker,
+            onToday = { state.backToToday() }
+        )
+        CalendarWeekHeader()
 
         // 日期网格
         Box(
@@ -422,52 +385,200 @@ private fun CalendarPager(
                 )
             ) { page ->
                 val pageWeekStart = if (expandMonth) 0L else weekStartOfPage(page)
-                val pageMonth = if (expandMonth) monthOfPage(page) else Dates.firstOfMonth(pageWeekStart)
-                val pageData = if (expandMonth) monthGridPage(pageMonth) else weekGridPage(pageWeekStart)
-                // 数据窗口按本页所在月取：只算本页 ±2 个月，滑到哪一年都能算，
-                // 用 scheduleVersion 做 key，配置一变就整页重算
-                val entries = remember(pageMonth, state.scheduleVersion) {
-                    state.windowedSelected(pageMonth)
-                }
-                val rowHeight = calendarRowHeight()
-                // 高亮只画在「选中日归属」的那一页：相邻月网格里恰好带上选中日时不出现幽灵选中
-                val selectedOnPage = if (expandMonth) {
-                    pageMonth == Dates.firstOfMonth(selectedMs)
-                } else {
-                    Dates.diffDays(pageWeekStart, selectedMs) in 0L..6L
-                }
-                Box(Modifier.fillMaxSize()) {
-                    if (expandMonth) {
-                        Box(
-                            Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = pageData.monthNumber.toString(),
-                                fontSize = Rpx.sp(400),
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF999999).copy(alpha = 0.1f)
-                            )
-                        }
-                    }
-                    Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
-                        pageData.rows.forEach { row ->
-                            Row(Modifier.fillMaxWidth().padding(horizontal = Rpx.dp(8))) {
-                                row.forEach { cell ->
-                                    CalendarCell(
-                                        day = cell.day,
-                                        dateStr = cell.dateStr,
-                                        lunarText = cell.lunar,
-                                        isToday = cell.dateStr == todayStr,
-                                        selected = selectedOnPage && cell.dateStr == selectedStr,
-                                        entry = entries[cell.dateStr],
-                                        rowHeight = rowHeight,
-                                        modifier = Modifier.weight(1f).height(rowHeight),
-                                        onClick = { state.onCellTap(cell.dateStr) }
-                                    )
-                                }
-                            }
-                        }
+                val pageMonth =
+                    if (expandMonth) monthOfPage(page) else Dates.firstOfMonth(pageWeekStart)
+                CalendarPageBody(
+                    state = state,
+                    person = person,
+                    expandMonth = expandMonth,
+                    pageMonth = pageMonth,
+                    pageWeekStart = pageWeekStart,
+                    containerHeight = containerHeight,
+                    interactive = interactive
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 左右滑动切人时的「相邻人员」预览页：只画当前浏览的那一页，
+ * 不建 pager、不响应点击，拖动时几乎不增加绘制成本（保证 60fps）。
+ */
+@Composable
+private fun CalendarPeekPage(state: IndexState, person: Person?, containerHeight: Dp) {
+    val weekStart = Dates.addDays(state.calendarWeekMs, -Dates.dayOfWeek(state.calendarWeekMs))
+    Column(Modifier.fillMaxWidth()) {
+        CalendarHeader(
+            monthFirst = state.calendarMonthMs,
+            interactive = false,
+            onPrev = {},
+            onNext = {},
+            onPickMonth = {},
+            onToday = {}
+        )
+        CalendarWeekHeader()
+        CalendarPageBody(
+            state = state,
+            person = person,
+            expandMonth = state.foldOpen,
+            pageMonth = Dates.firstOfMonth(state.calendarMonthMs),
+            pageWeekStart = weekStart,
+            containerHeight = containerHeight,
+            interactive = false
+        )
+    }
+}
+
+/** 日历头部：左右箭头 + 年月 + 今天 */
+@Composable
+private fun CalendarHeader(
+    monthFirst: Long,
+    interactive: Boolean,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onPickMonth: () -> Unit,
+    onToday: () -> Unit
+) {
+    val titleYear = Dates.year(monthFirst)
+    val titleMonth = Dates.month(monthFirst)
+    Box(Modifier.fillMaxWidth().height(Rpx.dp(76))) {
+        Row(
+            Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Box(
+                Modifier
+                    .width(Rpx.dp(90))
+                    .height(Rpx.dp(76))
+                    .clickable(enabled = interactive) { onPrev() },
+                contentAlignment = Alignment.Center
+            ) {
+                Chevron(dir = ChevronDir.LEFT, color = Color(0xFF555555), size = Rpx.dp(18))
+            }
+            Box(
+                Modifier
+                    .width(Rpx.dp(200))
+                    .height(Rpx.dp(76))
+                    .clickable(enabled = interactive) { onPickMonth() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = titleYear.toString() + "年" + titleMonth.toString() + "月",
+                    fontSize = Rpx.sp(32),
+                    color = Color(0xFF333333),
+                    textAlign = TextAlign.Center
+                )
+            }
+            Box(
+                Modifier
+                    .width(Rpx.dp(90))
+                    .height(Rpx.dp(76))
+                    .clickable(enabled = interactive) { onNext() },
+                contentAlignment = Alignment.Center
+            ) {
+                Chevron(dir = ChevronDir.RIGHT, color = Color(0xFF555555), size = Rpx.dp(18))
+            }
+        }
+        // 今天
+        Box(
+            Modifier
+                .align(Alignment.CenterEnd)
+                .height(Rpx.dp(50))
+                .background(
+                    Color(0xFFF1F1F1),
+                    RoundedCornerShape(topStart = Rpx.dp(50), bottomStart = Rpx.dp(50))
+                )
+                .clickable(enabled = interactive) { onToday() }
+                .padding(start = Rpx.dp(20), end = Rpx.dp(10)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("今天", fontSize = Rpx.sp(24), color = Color(0xFF333333))
+        }
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(Rpx.dp(2))
+                .background(Color(0xFFEDEDED))
+        )
+    }
+}
+
+/** 星期行（日 一 二 三 四 五 六） */
+@Composable
+private fun CalendarWeekHeader() {
+    Row(Modifier.fillMaxWidth().padding(horizontal = Rpx.dp(8))) {
+        WEEK_NAMES.forEach { name ->
+            Box(
+                Modifier.weight(1f).height(Rpx.dp(62)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(name, fontSize = Rpx.sp(28), color = Color(0xFF333333))
+            }
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(Rpx.dp(2)).background(Color(0xFFF5F5F5)))
+}
+
+/**
+ * 日历的一页（整月或单周）。数据窗口按本页所在月取：只算本页 ±2 个月，滑到哪一年都能算，
+ * 用 scheduleVersion + 人员 id 做 key，配置一变或换了预览人员就重算。
+ */
+@Composable
+private fun CalendarPageBody(
+    state: IndexState,
+    person: Person?,
+    expandMonth: Boolean,
+    pageMonth: Long,
+    pageWeekStart: Long,
+    containerHeight: Dp,
+    interactive: Boolean
+) {
+    val pageData = if (expandMonth) monthGridPage(pageMonth) else weekGridPage(pageWeekStart)
+    val entries = remember(pageMonth, state.scheduleVersion, person?.id) {
+        state.windowedEntries(person, pageMonth)
+    }
+    val rowHeight = calendarRowHeight()
+    val todayStr = state.todayStr
+    val selectedMs = Dates.startOfDay(state.calendarDateMs)
+    val selectedStr = Dates.formatYmd(selectedMs)
+    // 高亮只画在「选中日归属」的那一页：相邻月网格里恰好带上选中日时不出现幽灵选中
+    val selectedOnPage = if (expandMonth) {
+        pageMonth == Dates.firstOfMonth(selectedMs)
+    } else {
+        Dates.diffDays(pageWeekStart, selectedMs) in 0L..6L
+    }
+    Box(Modifier.fillMaxWidth().height(containerHeight)) {
+        if (expandMonth) {
+            Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = pageData.monthNumber.toString(),
+                    fontSize = Rpx.sp(400),
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF999999).copy(alpha = 0.1f)
+                )
+            }
+        }
+        Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
+            pageData.rows.forEach { row ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = Rpx.dp(8))) {
+                    row.forEach { cell ->
+                        CalendarCell(
+                            day = cell.day,
+                            dateStr = cell.dateStr,
+                            lunarText = cell.lunar,
+                            isToday = cell.dateStr == todayStr,
+                            selected = selectedOnPage && cell.dateStr == selectedStr,
+                            entry = entries[cell.dateStr],
+                            rowHeight = rowHeight,
+                            modifier = Modifier.weight(1f).height(rowHeight),
+                            onClick = { if (interactive) state.onCellTap(cell.dateStr) }
+                        )
                     }
                 }
             }
@@ -624,11 +735,11 @@ private fun CalendarCell(
     }
 }
 
-private enum class ChevronDir { LEFT, RIGHT, UP, DOWN }
+internal enum class ChevronDir { LEFT, RIGHT, UP, DOWN }
 
 /** 折线箭头 */
 @Composable
-private fun Chevron(dir: ChevronDir, color: Color, size: Dp) {
+internal fun Chevron(dir: ChevronDir, color: Color, size: Dp) {
     Canvas(Modifier.size(size)) {
         val w = this.size.width
         val h = this.size.height

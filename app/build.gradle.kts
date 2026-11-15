@@ -39,8 +39,9 @@ android {
     // 1.0.15 新增 2×1 小号小组件（日号圆圈版），4×2 大卡保持不变
     // 1.0.14 桌面小组件重新设计（2:1 卡片、7 天横排、圆角药丸、今天高亮）
     // 1.0.13 响铃时额外发一条「非常驻」通知，供 ColorOS 手表（OPPO Watch）镜像显示；划掉即关闭闹钟
-        versionCode = 119
-        versionName = "1.0.19"
+        // 1.0.20 闹钟设置/权限独立成页（首页顶部闹钟按钮进入）、全页左右滑动切人、锁竖屏、日历行高再按 6.1 英寸校准
+        versionCode = 120
+        versionName = "1.0.20"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
