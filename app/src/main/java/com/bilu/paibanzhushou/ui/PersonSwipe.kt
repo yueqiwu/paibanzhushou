@@ -7,11 +7,13 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -112,6 +114,7 @@ class PersonSwipeState(private val scope: CoroutineScope) {
  * - 起手点被别的组件消费了（按钮、人员标签的横向滚动等）→ 直接放行；
  * - 竖向位移先超过横向 → 交给页面竖向滚动。
  */
+@Composable
 fun Modifier.personSwipeSwitch(
     state: IndexState,
     swipe: PersonSwipeState,
@@ -119,7 +122,17 @@ fun Modifier.personSwipeSwitch(
     calendarBounds: () -> Rect?,
     enabled: () -> Boolean,
     onSwitch: (Person) -> Unit
-): Modifier = pointerInput(Unit) {
+): Modifier {
+    // pointerInput(Unit) 的手势协程只启动一次，闭包会一直沿用首次组合时捕获的 lambda。
+    // 首启只有 1 个人员（canSwipe = false），若直接捕获就会永远读不到「后来新增了人员」，
+    // 表现为添加人员后无法左右滑动、重启（重新组合）才恢复 —— 所以这里必须用
+    // rememberUpdatedState 把每帧最新的回调转给手势协程。
+    val currentEnabled = rememberUpdatedState(enabled)
+    val currentBounds = rememberUpdatedState(calendarBounds)
+    val currentWidth = rememberUpdatedState(widthPx)
+    val currentOnSwitch = rememberUpdatedState(onSwitch)
+
+    return pointerInput(Unit) {
     val slop = viewConfiguration.touchSlop
     val thresholdMin = 44.dp.toPx()
     val thresholdMax = 96.dp.toPx()
@@ -138,10 +151,10 @@ fun Modifier.personSwipeSwitch(
         // 走 Initial 阶段：抢在按钮 / 标签的 clickable 之前判断方向，
         // 否则按月栏那种 clickable 会先把 down 消费掉，滑动就永远起不来。
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        if (!enabled()) return@awaitEachGesture
-        val bounds = calendarBounds()
+        if (!currentEnabled.value()) return@awaitEachGesture
+        val bounds = currentBounds.value()
         if (bounds != null && bounds.contains(down.position)) return@awaitEachGesture
-        val width = (widthPx().takeIf { it > 1f } ?: size.width.toFloat())
+        val width = (currentWidth.value().takeIf { it > 1f } ?: size.width.toFloat())
         if (width <= 1f) return@awaitEachGesture
         val threshold = (width * 0.12f).coerceIn(thresholdMin, thresholdMax)
         val edge = width * 0.92f
@@ -186,6 +199,8 @@ fun Modifier.personSwipeSwitch(
         val distance = abs(dx)
         val enough = distance >= threshold ||
             (elapsed <= 260L && distance >= flingDistance)
-        swipe.release(enough, width, onSwitch)
+        val switchTo = currentOnSwitch.value
+        swipe.release(enough, width) { person -> switchTo(person) }
+    }
     }
 }

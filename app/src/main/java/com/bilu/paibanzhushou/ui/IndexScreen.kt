@@ -125,8 +125,6 @@ fun IndexScreen(
     var calendarBounds by remember { mutableStateOf<Rect?>(null) }
     val density = LocalDensity.current
     val dragging = state.dragController.dragging
-    val pickerVisible = state.picker.visible
-    val canSwipe = !dragging && !pickerVisible && state.people.size > 1
     val currentPerson = state.people.firstOrNull { it.id == state.activePersonId }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(C.pageBg)) {
@@ -142,7 +140,13 @@ fun IndexScreen(
                     swipe = swipe,
                     widthPx = { widthPx },
                     calendarBounds = { calendarBounds },
-                    enabled = { canSwipe },
+                    // 注意：这里必须读实时状态。canSwipe 是组合期的普通 val，被手势协程捕获后
+                    // 会永远停留在首帧（首次安装只有 1 个人员 → false），导致新增人员后滑不动。
+                    enabled = {
+                        !state.dragController.dragging &&
+                            !state.picker.visible &&
+                            state.people.size > 1
+                    },
                     onSwitch = { person -> state.setActivePerson(person.id) }
                 )
                 .verticalScroll(scrollState, enabled = !dragging && !swipe.swiping)
