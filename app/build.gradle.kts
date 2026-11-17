@@ -45,8 +45,8 @@ android {
     // 1.0.22 切人动画只保留日历滑入（去掉上两栏淡入）；闹钟铃声恢复 App 内自选；删掉点进去也没开关的
     //        「勿扰 / 睡眠模式例外」权限项，改成文字说明；对比同事排班 / 闹钟设置页补上左右滑入的页面转场
     // 1.0.24 修「首次安装后新增人员就滑不动、重启才恢复」：滑动手势的判断改为每次按下都读实时状态
-        versionCode = 124
-        versionName = "1.0.24"
+        versionCode = 125
+        versionName = "1.0.25"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

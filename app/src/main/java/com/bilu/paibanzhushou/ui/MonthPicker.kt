@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,15 +19,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -50,9 +55,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.bilu.paibanzhushou.core.Dates
 import java.util.Calendar
+import java.util.Locale
 
 /** 滚轮行高（uni picker 的每行高度） */
 private val WHEEL_ITEM_H: Dp = Rpx.dp(88)
+
+/** 日期网格每行高度 */
+private val DAY_CELL_H: Dp = Rpx.dp(74)
 
 /** 完整日期选择（等价 uni picker mode="date"） */
 @Composable
@@ -85,12 +94,39 @@ private fun WheelPickerDialog(
     onPick: (Long) -> Unit
 ) {
     if (!show) return
-    val cal = remember(initialMs) { Calendar.getInstance().apply { timeInMillis = initialMs } }
-    var year by remember { mutableIntStateOf(cal.get(Calendar.YEAR)) }
-    var month by remember { mutableIntStateOf(cal.get(Calendar.MONTH) + 1) }
-    var day by remember { mutableIntStateOf(cal.get(Calendar.DAY_OF_MONTH)) }
-    val years = remember { (1970..2100).toList() }
+    val start = remember { Calendar.getInstance().apply { timeInMillis = initialMs } }
+    var year by remember { mutableIntStateOf(start.get(Calendar.YEAR)) }
+    var month by remember { mutableIntStateOf(start.get(Calendar.MONTH) + 1) }
+    var day by remember { mutableIntStateOf(start.get(Calendar.DAY_OF_MONTH)) }
+    var quick by remember { mutableStateOf(monthOnly) }
+    var quickYear by remember { mutableIntStateOf(start.get(Calendar.YEAR)) }
+
+    fun stepMonth(delta: Int) {
+        var y = year
+        var m = month + delta
+        if (m < 1) { m = 12; y -= 1 }
+        if (m > 12) { m = 1; y += 1 }
+        if (y in 1970..2100) { year = y; month = m }
+    }
+
+    fun pickToday() {
+        val c = Calendar.getInstance()
+        year = c.get(Calendar.YEAR)
+        month = c.get(Calendar.MONTH) + 1
+        day = c.get(Calendar.DAY_OF_MONTH)
+    }
+
     val dayCount = Dates.daysInMonth(year, month)
+    val firstDow = remember(year, month) {
+        Calendar.getInstance().apply {
+            set(year, month - 1, 1, 12, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.get(Calendar.DAY_OF_WEEK) - 1
+    }
+    val todayCal = remember { Calendar.getInstance() }
+    val todayY = todayCal.get(Calendar.YEAR)
+    val todayM = todayCal.get(Calendar.MONTH) + 1
+    val todayD = todayCal.get(Calendar.DAY_OF_MONTH)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -98,7 +134,6 @@ private fun WheelPickerDialog(
             dismissOnBackPress = true,
             dismissOnClickOutside = false,
             usePlatformDefaultWidth = false,
-            // 关键：让弹窗窗口铺满整屏（否则窗口被系统栏内缩，面板底边到不了屏幕底部）
             decorFitsSystemWindows = false
         )
     ) {
@@ -119,18 +154,13 @@ private fun WheelPickerDialog(
                     .background(Color.White)
                     .navigationBarsPadding()
             ) {
-                // 顶部工具栏：取消 / 确定（与 uni picker 一致，中间留空）
+                // 顶部工具栏：取消 / 标题 / 确定
                 Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(Rpx.dp(88)),
+                    Modifier.fillMaxWidth().height(Rpx.dp(88)),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxSize()
-                            .clickable { onDismiss() },
+                        Modifier.weight(1f).fillMaxSize().clickable { onDismiss() },
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Text(
@@ -140,19 +170,22 @@ private fun WheelPickerDialog(
                             modifier = Modifier.padding(start = Rpx.dp(30))
                         )
                     }
+                    Text(
+                        if (monthOnly) "选择月份" else "选择日期",
+                        fontSize = Rpx.sp(30),
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF111111)
+                    )
                     Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxSize()
-                            .clickable {
-                                val ms = if (monthOnly) {
-                                    Dates.firstOfMonth(year, month)
-                                } else {
-                                    Dates.parseYmd(String.format("%04d-%02d-%02d", year, month, day))
-                                        ?: initialMs
-                                }
-                                onPick(ms)
-                            },
+                        Modifier.weight(1f).fillMaxSize().clickable {
+                            val ms = if (monthOnly) {
+                                Dates.firstOfMonth(year, month)
+                            } else {
+                                Dates.parseYmd(String.format(Locale.US, "%04d-%02d-%02d", year, month, day))
+                                    ?: initialMs
+                            }
+                            onPick(ms)
+                        },
                         contentAlignment = Alignment.CenterEnd
                     ) {
                         Text(
@@ -166,82 +199,181 @@ private fun WheelPickerDialog(
                 }
                 Box(Modifier.fillMaxWidth().height(Rpx.dp(1)).background(Color(0xFFEBEBEB)))
 
-                Box(Modifier.fillMaxWidth().height(WHEEL_ITEM_H * 5)) {
-                    Row(
-                        Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        WheelColumn(
-                            values = years.map { it.toString() + "年" },
-                            selectedIndex = years.indexOf(year).coerceAtLeast(0),
-                            onSelected = { year = years[it] },
-                            modifier = Modifier.weight(1f)
-                        )
-                        WheelColumn(
-                            values = (1..12).map { it.toString() + "月" },
-                            selectedIndex = month - 1,
-                            onSelected = { month = it + 1 },
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (!monthOnly) {
-                            WheelColumn(
-                                values = (1..dayCount).map { it.toString() + "日" },
-                                selectedIndex = (day - 1).coerceIn(0, dayCount - 1),
-                                onSelected = { day = it + 1 },
-                                modifier = Modifier.weight(1f)
-                            )
+                // 年月切换条：‹ 2026年1月 › ＋ 今天
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(Rpx.dp(78))
+                        .padding(horizontal = Rpx.dp(14)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ArrowButton("‹") {
+                        if (quick) {
+                            if (quickYear > 1970) quickYear -= 1
+                        } else {
+                            stepMonth(-1)
                         }
                     }
-                    // 中间选中行：浅灰选中带 + 上下的细分隔线（对齐 uni picker）
                     Box(
-                        Modifier
-                            .align(Alignment.Center)
-                            .fillMaxWidth()
-                            .height(WHEEL_ITEM_H)
-                            .background(Color(0x0A000000))
-                    )
-                    Box(
-                        Modifier
-                            .align(Alignment.Center)
-                            .fillMaxWidth()
-                            .height(Rpx.dp(1))
-                            .offset(y = 0.dp - WHEEL_ITEM_H / 2)
-                            .background(Color(0xFFE9E9E9))
-                    )
-                    Box(
-                        Modifier
-                            .align(Alignment.Center)
-                            .fillMaxWidth()
-                            .height(Rpx.dp(1))
-                            .offset(y = WHEEL_ITEM_H / 2)
-                            .background(Color(0xFFE9E9E9))
-                    )
-                    Column(Modifier.fillMaxSize()) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .background(
-                                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                                        listOf(Color(0xF2FFFFFF), Color(0x00FFFFFF))
-                                    )
-                                )
+                        Modifier.weight(1f).fillMaxHeight().clickable(enabled = !monthOnly) {
+                            quick = !quick
+                            if (quick) quickYear = year
+                        },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            if (quick) quickYear.toString() + "年" else year.toString() + "年 " + month + "月",
+                            fontSize = Rpx.sp(32),
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF111111)
                         )
-                        Box(Modifier.fillMaxWidth().height(WHEEL_ITEM_H))
+                    }
+                    ArrowButton("›") {
+                        if (quick) {
+                            if (quickYear < 2100) quickYear += 1
+                        } else {
+                            stepMonth(1)
+                        }
+                    }
+                    if (!monthOnly) {
                         Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .background(
-                                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                                        listOf(Color(0x00FFFFFF), Color(0xF2FFFFFF))
-                                    )
-                                )
+                            Modifier.height(Rpx.dp(56))
+                                .clip(RoundedCornerShape(Rpx.dp(28)))
+                                .background(Color(0xFFF2F5FA))
+                                .clickable { pickToday() }
+                                .padding(horizontal = Rpx.dp(20)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("今天", fontSize = Rpx.sp(26), color = Color(0xFF4A90E2))
+                        }
+                    }
+                }
+
+                if (quick) {
+                    // 年 / 月 快速选择
+                    Column(Modifier.fillMaxWidth().padding(horizontal = Rpx.dp(24), vertical = Rpx.dp(4))) {
+                        for (r in 0 until 4) {
+                            Row(Modifier.fillMaxWidth()) {
+                                for (c in 0 until 3) {
+                                    val m = r * 3 + c + 1
+                                    val active = m == month && quickYear == year
+                                    Box(
+                                        Modifier
+                                            .weight(1f)
+                                            .padding(Rpx.dp(6))
+                                            .height(Rpx.dp(76))
+                                            .clip(RoundedCornerShape(Rpx.dp(16)))
+                                            .background(if (active) Color(0xFFEAF2FE) else Color(0xFFF5F7FA))
+                                            .clickable {
+                                                year = quickYear
+                                                month = m
+                                                if (monthOnly) {
+                                                    onPick(Dates.firstOfMonth(year, month))
+                                                } else {
+                                                    quick = false
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            m.toString() + "月",
+                                            fontSize = Rpx.sp(30),
+                                            color = if (active) Color(0xFF4A90E2) else Color(0xFF333333),
+                                            fontWeight = if (active) FontWeight.Medium else FontWeight.Normal
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // 星期标题
+                    Row(Modifier.fillMaxWidth().padding(horizontal = Rpx.dp(24)).height(Rpx.dp(44))) {
+                        listOf("日", "一", "二", "三", "四", "五", "六").forEach { w ->
+                            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                                Text(w, fontSize = Rpx.sp(24), color = Color(0xFF9AA3B2))
+                            }
+                        }
+                    }
+                    Column(Modifier.fillMaxWidth().padding(horizontal = Rpx.dp(24))) {
+                        for (row in 0 until ((firstDow + dayCount + 6) / 7)) {
+                            Row(Modifier.fillMaxWidth()) {
+                                for (col in 0 until 7) {
+                                    val d = row * 7 + col - firstDow + 1
+                                    if (d in 1..dayCount) {
+                                        val selected = d == day
+                                        val isToday = year == todayY && month == todayM && d == todayD
+                                        Box(
+                                            Modifier.weight(1f).height(DAY_CELL_H),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Box(
+                                                Modifier
+                                                    .size(Rpx.dp(62))
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        if (selected) Color(0xFF4A90E2) else Color.Transparent
+                                                    )
+                                                    .then(
+                                                        if (isToday && !selected) {
+                                                            Modifier.border(Rpx.dp(2), Color(0xFF4A90E2), CircleShape)
+                                                        } else {
+                                                            Modifier
+                                                        }
+                                                    )
+                                                    .clickable { day = d },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    d.toString(),
+                                                    fontSize = Rpx.sp(30),
+                                                    fontWeight = if (selected || isToday) FontWeight.Medium else FontWeight.Normal,
+                                                    color = when {
+                                                        selected -> Color.White
+                                                        isToday -> Color(0xFF4A90E2)
+                                                        else -> Color(0xFF111111)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Box(Modifier.weight(1f).height(DAY_CELL_H))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // 已选结果，点确定前先看一眼
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = Rpx.dp(30), vertical = Rpx.dp(8)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("已选", fontSize = Rpx.sp(26), color = Color(0xFF9AA3B2))
+                        Text(
+                            String.format(Locale.US, "%04d-%02d-%02d", year, month, day),
+                            fontSize = Rpx.sp(30),
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF111111),
+                            modifier = Modifier.padding(start = Rpx.dp(10))
                         )
                     }
                 }
             }
         }
+    }
+}
+
+/** 日期弹层里的小箭头按钮 */
+@Composable
+private fun ArrowButton(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(Rpx.dp(64))
+            .clip(CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, fontSize = Rpx.sp(40), color = Color(0xFF333333))
     }
 }
 
