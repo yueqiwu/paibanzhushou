@@ -47,8 +47,9 @@ android {
     // 1.0.24 修「首次安装后新增人员就滑不动、重启才恢复」：滑动手势的判断改为每次按下都读实时状态
     // 1.0.25 日期选择从三列滚轮改为日历格子（自绘）
     // 1.0.26 日期 / 月份 / 闹钟时间都换成 Android 系统原生弹窗（DatePickerDialog / TimePickerDialog）
-        versionCode = 126
-        versionName = "1.0.26"
+    // 1.0.27 修两个闹钟不跟排班走的问题：单日改成「休息」后旧闹钟撤不掉；闹钟页改完时间直接退出不生效
+        versionCode = 127
+        versionName = "1.0.27"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

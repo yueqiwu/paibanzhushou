@@ -248,6 +248,11 @@ class IndexState(
             calendarMonthMs = Dates.firstOfMonth(Dates.todayStart())
             calendarWeekMs = Dates.todayStart()
             generateSchedule()
+        } else if (alarmConfig.enabled) {
+            // 回到首页 / 切回前台时补写一次系统闹钟：
+            // 闹钟页里改完时间直接退出、或者某次写入被系统拒绝，都在这里按最新设置补齐。
+            // 手动在闹钟列表里取消过的日期有 SKIP 记录，不会被重新加回来。
+            resyncAlarms()
         }
     }
 
@@ -348,6 +353,18 @@ class IndexState(
         PeopleStore.saveActivePersonId(activePersonId)
     }
 
+    /**
+     * 立即落盘，跳过 [scheduleSave] 的 200ms 防抖。
+     *
+     * 排班一变就重写闹钟的路径要留一份立刻可见的磁盘数据：开机补写（BootReceiver）、
+     * 关掉再打开开关时的 [ShiftAlarm.resyncActive] 都是从磁盘读排班的。
+     */
+    fun savePeopleNow() {
+        saveJob?.cancel()
+        saveJob = null
+        savePeople()
+    }
+
     fun scheduleSave(delayMs: Long = 200L) {
         saveJob?.cancel()
         saveJob = scope.launch {
@@ -429,7 +446,8 @@ class IndexState(
      */
     fun generateSchedule() {
         persistFormToActivePerson()
-        scheduleSave()
+        // 立即落盘：紧接着的 resyncAlarms / 桌面小组件都要按新排班算
+        savePeopleNow()
         scheduleVersion++
         windowCache.clear()
         personWindowCache.clear()
@@ -1015,10 +1033,24 @@ class IndexState(
         }
     }
 
-    /** 按当前人员和设置重写系统闹钟；返回写入数量 */
+    /**
+     * 按当前人员和设置重写系统闹钟；返回写入数量。
+     *
+     * 这里必须优先用内存里的 [people]：磁盘写入有 200ms 防抖（[scheduleSave]），
+     * 单日把某天改成「休息」之后马上重写闹钟时，从磁盘读到的还是改之前的排班，
+     * 那天原本「值班」的旧闹钟就撤不掉 —— 表现为「已经改成休息了，闹钟还在响」。
+     * 内存里的这份 people 是 [persistFormToActivePerson] 刚写完的，才是当前排班。
+     */
     fun resyncAlarms(): Int {
-        val count = ShiftAlarm.sync(context, ShiftAlarm.alarmPerson(alarmConfig), alarmConfig)
+        val id = alarmConfig.personId ?: activePersonId
+        val person = people.firstOrNull { it.id == id } ?: ShiftAlarm.alarmPerson(alarmConfig)
+        val count = ShiftAlarm.sync(context, person, alarmConfig)
         alarmCount = count
+        android.util.Log.i(
+            "BootAlarm",
+            "resync person=" + (person?.name ?: "null") + " bans=" + alarmConfig.bans +
+                " times=" + alarmConfig.times + " -> " + count
+        )
         return count
     }
 
