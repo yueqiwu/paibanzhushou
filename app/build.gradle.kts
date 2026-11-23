@@ -48,8 +48,8 @@ android {
     // 1.0.25 日期选择从三列滚轮改为日历格子（自绘）
     // 1.0.26 日期 / 月份 / 闹钟时间都换成 Android 系统原生弹窗（DatePickerDialog / TimePickerDialog）
     // 1.0.27 修两个闹钟不跟排班走的问题：单日改成「休息」后旧闹钟撤不掉；闹钟页改完时间直接退出不生效
-        versionCode = 127
-        versionName = "1.0.27"
+        versionCode = 128
+        versionName = "1.0.28"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

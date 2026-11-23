@@ -21,6 +21,9 @@
     <!-- 常驻前台服务：ColorOS 会延后「后台闲置」应用的精确闹钟，前台服务保持应用活跃 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- 「电池优化白名单」：不进白名单时，熄屏/清后台后系统可能冻结 App，AlarmManager 广播到不了。
+         声明后可用 ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS 拉起系统白名单对话框。 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- 应用内更新：下载 APK 后拉起系统安装器 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 

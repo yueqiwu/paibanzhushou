@@ -124,15 +124,14 @@ class AlarmRingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
-        if (action == ACTION_DISMISS) {
-            finishRing()
-            return START_NOT_STICKY
-        }
-        if (action == ACTION_SNOOZE) {
-            val d = intent.getStringExtra(ShiftAlarm.EXTRA_DATE) ?: dateText
-            val b = intent.getStringExtra(ShiftAlarm.EXTRA_BAN) ?: banText
-            if (d.isNotEmpty() && b.isNotEmpty()) {
-                runCatching { ShiftAlarm.scheduleSnooze(this, d, b, 5) }
+        if (action == ACTION_DISMISS || action == ACTION_SNOOZE) {
+            // 服务可能已经被系统杀掉、这次是为「关闭闹钟」重新拉起来的，
+            // dateText / banText 还是空的，所以要先把 intent 里带的日期班次读出来，
+            // 否则 finishRing() 撤不掉那条降级响声通知。
+            intent.getStringExtra(ShiftAlarm.EXTRA_DATE)?.let { if (it.isNotEmpty()) dateText = it }
+            intent.getStringExtra(ShiftAlarm.EXTRA_BAN)?.let { if (it.isNotEmpty()) banText = it }
+            if (action == ACTION_SNOOZE && dateText.isNotEmpty() && banText.isNotEmpty()) {
+                runCatching { ShiftAlarm.scheduleSnooze(this, dateText, banText, 5) }
             }
             finishRing()
             return START_NOT_STICKY
@@ -400,13 +399,14 @@ class AlarmRingService : Service() {
          * 开始响铃。用 startForegroundService，到点广播来自 setAlarmClock，
          * 属于系统允许「后台启动前台服务」的场景；失败时只记日志，由通知兜底。
          */
-        fun start(context: Context, date: String, ban: String) {
+        fun start(context: Context, date: String, ban: String): Boolean {
             val intent = Intent(context, AlarmRingService::class.java).apply {
                 putExtra(ShiftAlarm.EXTRA_DATE, date)
                 putExtra(ShiftAlarm.EXTRA_BAN, ban)
             }
             val ok = runCatching { context.startForegroundService(intent) }.isSuccess
             if (!ok) Log.w(TAG, "start ring FGS failed")
+            return ok
         }
 
         fun stop(context: Context) {

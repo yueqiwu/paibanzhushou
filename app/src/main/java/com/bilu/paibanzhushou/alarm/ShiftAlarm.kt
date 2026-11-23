@@ -3,6 +3,7 @@ package com.bilu.paibanzhushou.alarm
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.os.Build
+import android.os.PowerManager
 import android.content.Context
 import android.content.Intent
 import com.bilu.paibanzhushou.MainActivity
@@ -64,6 +65,17 @@ object ShiftAlarm {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return false
         return am.canScheduleExactAlarms()
+    }
+
+    /**
+     * 是否已加入「电池优化白名单」。
+     *
+     * 没加白名单时，荣耀/华为/OPPO/vivo/小米等机型可能在熄屏或划掉后台后冻结应用，
+     * AlarmManager 的闹钟广播会被延后甚至丢掉 —— 表现就是「只有 App 在前台时才响」。
+     */
+    fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
+        return runCatching { pm.isIgnoringBatteryOptimizations(context.packageName) }.getOrDefault(true)
     }
 
     /** 同步：写新的、撤旧的。返回真正写进系统的闹钟数量 */

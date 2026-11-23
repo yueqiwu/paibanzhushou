@@ -38,6 +38,13 @@ object AlarmNotifications {
      * 这条通道不能带声音，否则手机每 12 秒会跟着响一声；只保留震动 + 高重要性。
      */
     private const val CHANNEL_ID_WATCH_LOOP = "shift_alarm_watch_v2"
+    /**
+     * 降级响声通道（前台服务起不来时用）。
+     *
+     * 系统不给后台起前台服务（部分国产 ROM 划掉后台后会这样），MediaPlayer 就没机会发声；
+     * 这条通道自己带闹铃音，靠通知音把这一班叫醒。
+     */
+    private const val CHANNEL_ID_SOUND_FALLBACK = "shift_alarm_sound_fallback_v1"
     private val LEGACY_CHANNEL_IDS = listOf("shift_alarm_ring_v1", "shift_alarm")
 
     private fun ringtoneUri(): android.net.Uri {
@@ -69,6 +76,35 @@ object AlarmNotifications {
             // 声音由 AlarmRingService 的 MediaPlayer 负责（界面可能被系统拦掉，服务不会），
             // 这里留空避免两条音轨叠在一起变成回声；震动保留，作为额外的触觉提示。
             setSound(null, null)
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 700, 500, 700, 500, 1200)
+            setBypassDnd(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setShowBadge(true)
+        }
+        runCatching { nm.createNotificationChannel(channel) }
+    }
+
+    /**
+     * 降级响声通道：自己带闹铃音（USAGE_ALARM，跟随闹钟音量），并且 bypassDnd。
+     *
+     * 只在 [showSoundFallback] 里用 —— 平时铃声由 AlarmRingService 的 MediaPlayer 放，
+     * 那时不需要这条通道响。
+     */
+    private fun ensureSoundFallbackChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        val attrs = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        val channel = NotificationChannel(
+            CHANNEL_ID_SOUND_FALLBACK,
+            "班次闹钟（兜底响声）",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "App 在后台被系统限制时，用这条通知的闹铃音把这一班叫醒"
+            setSound(ringtoneUri(), attrs)
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 700, 500, 700, 500, 1200)
             setBypassDnd(true)
@@ -237,6 +273,58 @@ object AlarmNotifications {
     }
 
     /**
+     * 降级响声：前台服务起不来时，用带闹铃音的通知把这班叫醒。
+     *
+     * 为什么需要它：部分国产 ROM（荣耀/华为等）在 App 被划掉后，会拒绝
+     * `startForegroundService`（抛 ForegroundServiceStartNotAllowedException 或直接被拦），
+     * 这时 [AlarmRingService] 根本没跑起来，MediaPlayer 也就没机会发声。
+     * 通知音轨由系统播放，不受后台启动限制，所以退回「通知自己响」至少能叫醒人。
+     *
+     * 通知 id 用 [notificationId] + 5，避免和正常响铃那条（+0/+1/+2）互相覆盖。
+     */
+    fun showSoundFallback(context: Context, date: String, ban: String) {
+        if (!canPost(context)) return
+        ensureSoundFallbackChannel(context)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+
+        val fire = AlarmRingActivity.intent(context, date, ban)
+        val fullPi = PendingIntent.getActivity(
+            context, requestCode(date, ban, 0), fire,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val dismissPi = PendingIntent.getService(
+            context, requestCode(date, ban, 1),
+            ringCommand(context, AlarmRingService.ACTION_DISMISS, date, ban),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val snoozePi = PendingIntent.getService(
+            context, requestCode(date, ban, 2),
+            ringCommand(context, AlarmRingService.ACTION_SNOOZE, date, ban),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val text = date + " 排到「" + ban + "」，记得按时到岗"
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID_SOUND_FALLBACK)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle("班次闹钟 · " + ban)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            // 这条必须能被划掉：系统不给后台起服务，没有「关闭闹钟」的服务动作可用
+            .setOngoing(false)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(false)
+            .setContentIntent(fullPi)
+            .setFullScreenIntent(fullPi, true)
+            .setDeleteIntent(dismissPi)
+            .addAction(0, "关闭闹钟", dismissPi)
+            .addAction(0, "5 分钟后提醒", snoozePi)
+        runCatching { nm.notify(notificationId(date, ban) + 5, builder.build()) }
+    }
+
+    /**
      * 手表镜像通知。
      *
      * [onlyAlertOnce] = false 时，同一条通知每 notify 一次就会被当作「新提醒」重新提醒一次，
@@ -317,6 +405,7 @@ object AlarmNotifications {
         runCatching { nm.cancel(notificationId(date, ban)) }
         runCatching { nm.cancel(notificationId(date, ban) + 1) }
         runCatching { nm.cancel(notificationId(date, ban) + 2) }
+        runCatching { nm.cancel(notificationId(date, ban) + 5) }
     }
 
     private fun notificationId(date: String, ban: String) = (date + "#" + ban).hashCode()

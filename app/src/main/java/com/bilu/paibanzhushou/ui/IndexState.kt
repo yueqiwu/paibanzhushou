@@ -1,5 +1,6 @@
 package com.bilu.paibanzhushou.ui
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -50,7 +51,9 @@ data class AlarmPermission(
     val id: String,
     val title: String,
     val desc: String,
-    val ok: Boolean
+    val ok: Boolean,
+    /** 无法自动检测的项：只做引导，不计入「还有 N 项没开启」，也不点红点 */
+    val hintOnly: Boolean = false
 )
 
 /** 确认弹窗 */
@@ -92,6 +95,8 @@ class IndexState(
         const val PERM_EXACT = "exact"
         const val PERM_OVERLAY = "overlay"
         const val PERM_FSI = "fsi"
+        const val PERM_BATTERY = "battery"
+        const val PERM_AUTOSTART = "autostart"
     }
 
     val dragController = DragSortController()
@@ -967,6 +972,20 @@ class IndexState(
                     desc = "锁屏时自动亮屏显示响铃页（部分机型叫「锁屏显示」）",
                     ok = AlarmNotifications.canUseFullScreen(context)
                 ),
+                AlarmPermission(
+                    id = PERM_BATTERY,
+                    title = "电池优化白名单",
+                    desc = "不加白名单，熄屏或清后台后系统可能冻住 App，闹钟到点不响",
+                    ok = ShiftAlarm.isIgnoringBatteryOptimizations(context)
+                ),
+                AlarmPermission(
+                    id = PERM_AUTOSTART,
+                    title = "自启动 / 后台运行",
+                    desc = "荣耀、华为、OPPO、vivo、小米等机型还要在系统设置里允许「自启动」「后台运行」，" +
+                        "否则划掉后台后闹钟不响。此项无法自动检测，请手动确认已允许",
+                    ok = false,
+                    hintOnly = true
+                ),
             )
         }
 
@@ -1002,11 +1021,40 @@ class IndexState(
                 } else null,
                 app
             )
+            PERM_BATTERY -> listOfNotNull(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg)
+                } else null,
+                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+                app
+            )
+            // 国产 ROM 的「自启动 / 后台运行」没有统一入口，逐个试各家的设置页，都打不开就落到应用详情
+            PERM_AUTOSTART -> autostartIntents() + app
             else -> listOf(app)
         }
         for (i in candidates) {
             val ok = runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
             if (ok) return
+        }
+    }
+
+    /** 各家 ROM 的「自启动 / 后台运行」管理页（打不开就抛异常，由外层 runCatching 兜住） */
+    private fun autostartIntents(): List<Intent> {
+        val vendors = listOf(
+            "com.hihonor.systemmanager" to "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+            "com.huawei.systemmanager" to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+            "com.miui.securitycenter" to "com.miui.permcenter.autostart.AutoStartManagementActivity",
+            "com.coloros.safecenter" to "com.coloros.safecenter.permission.startup.StartupAppListActivity",
+            "com.oppo.safe" to "com.oppo.safe.permission.startup.StartupAppListActivity",
+            "com.vivo.permissionmanager" to "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
+            "com.iqoo.secure" to "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity",
+            "com.letv.android.letvsafe" to "com.letv.android.letvsafe.AutobootManageActivity"
+        )
+        return vendors.map { (p, c) ->
+            Intent().apply {
+                component = ComponentName(p, c)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
         }
     }
 

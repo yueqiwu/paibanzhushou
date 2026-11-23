@@ -374,7 +374,8 @@ private fun HeroCard(state: IndexState, onOpenAlarmSettings: () -> Unit) {
 @Composable
 private fun AlarmTopButton(state: IndexState, onClick: () -> Unit) {
     val enabled = state.alarmConfig.enabled
-    val missing = state.alarmPermissions.count { !it.ok }
+    // hintOnly 的项（自启动/后台运行）无法自动检测，不计入红点
+    val missing = state.alarmPermissions.count { !it.ok && !it.hintOnly }
     val fg = if (enabled) C.blue else Color(0xFF5B6B7F)
     Box(
         Modifier

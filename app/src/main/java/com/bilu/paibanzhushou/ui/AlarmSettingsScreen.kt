@@ -359,14 +359,16 @@ fun AlarmSettingsScreen(
             // 权限
             SectionLabel("闹钟权限", topMargin = Rpx.dp(28))
             Text(
-                text = "下面这些开关决定闹钟能不能准点响、能不能亮屏弹出响铃页",
+                text = "下面这些开关决定闹钟能不能准点响、能不能亮屏弹出响铃页。" +
+                    "荣耀 / 华为等机型还要允许「自启动」「后台运行」，否则划掉后台后闹钟不响",
                 fontSize = Rpx.sp(21),
                 color = C.hint,
                 lineHeight = Rpx.sp(30),
                 modifier = Modifier.padding(top = Rpx.dp(8))
             )
             val perms = state.alarmPermissions
-            val missing = perms.count { !it.ok }
+            // hintOnly 的项（自启动 / 后台运行）没法自动检测，不计入「没开启」的数量
+            val missing = perms.count { !it.ok && !it.hintOnly }
             Text(
                 text = if (missing == 0) "全部已开启，闹钟可以正常响" else "还有 " + missing + " 项没开启",
                 fontSize = Rpx.sp(22),
@@ -452,7 +454,18 @@ private fun AlarmPermissionRow(perm: AlarmPermission, onOpen: () -> Unit) {
                 modifier = Modifier.padding(top = Rpx.dp(4))
             )
         }
-        if (perm.ok) {
+        if (perm.hintOnly) {
+            // 无法自动检测：只给个入口让用户自己去确认，不显示「已开启」也不显示「去设置」的蓝按钮
+            Text(
+                text = "去确认 ›",
+                fontSize = Rpx.sp(22),
+                color = C.blue,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .padding(start = Rpx.dp(12))
+                    .clickable { onOpen() }
+            )
+        } else if (perm.ok) {
             Text(
                 text = "已开启",
                 fontSize = Rpx.sp(22),
