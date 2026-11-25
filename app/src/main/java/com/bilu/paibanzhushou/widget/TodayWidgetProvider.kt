@@ -7,21 +7,24 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.util.TypedValue
+import android.view.View
 import android.widget.RemoteViews
 import com.bilu.paibanzhushou.MainActivity
 import com.bilu.paibanzhushou.R
 import com.bilu.paibanzhushou.core.BanColors
 
 /**
- * 桌面小组件（今日）：2×1 卡片，只回答一件事 ——「现在轮到谁、今天上什么班」。
+ * 桌面小组件（今日）：2×1 卡片，回答一件事 ——「所有排班人员今天各上什么班」。
  *
  * 和另两张卡的区别：
- * - 4×2 大卡（[ScheduleWidgetProvider]）是 7 天日历网格，信息全但要占 4×2；
- * - 2×1 小卡（[ScheduleCompactWidgetProvider]）是今天起 7 天的日号圆圈，看趋势；
- * - 这张（今日）只放今天的班次胶囊 + 明天一句预告，一眼就能看到今天该不该早起。
+ * - 4×2 大卡（[ScheduleWidgetProvider]）是某个人的 7 天日历网格，信息全但要占 4×2；
+ * - 2×1 小卡（[ScheduleCompactWidgetProvider]）是某个人今天起 7 天的日号圆圈，看趋势；
+ * - 这张（今日）一屏放全员：每人一列（班次胶囊 + 姓名），一眼看完今天谁上班谁休息。
  *
- * 数据仍走 [WidgetData]（同一个人、同一份排班），班次色用预置 `pill_<hex>`：
+ * 数据走 [WidgetData.loadToday]（全员，顺序 = 首页人员标签顺序），班次色用预置 `pill_<hex>`：
  * RemoteViews 的 setBackgroundColor 会把胶囊圆角抹掉，圆角只能靠 drawable。
+ * 列是运行时用 [RemoteViews.addView] 塞进 `t_row` 的，最多 [MAX_COLUMNS] 列，多出来折成「+N」。
  */
 class TodayWidgetProvider : AppWidgetProvider() {
 
@@ -55,6 +58,20 @@ class TodayWidgetProvider : AppWidgetProvider() {
 
         private const val MUTED = "#7A8494"
 
+        /** 一屏最多显示几列（2×1 约 170dp 宽、去掉左右内边距剩 150dp，5 列是能看清字的上限） */
+        private const val MAX_COLUMNS = 5
+
+        /**
+         * 列内胶囊的字号/左右内边距跟着人数缩放：人少时放大显得舒展，5 个人时收到 8.5sp + 2dp，
+         * 这样连「大夜班」这种三字班次也能塞进 30dp 的列宽，不会被截成「大夜…」。
+         */
+        private fun banStyle(count: Int): Pair<Float, Int> = when {
+            count <= 2 -> 11f to 8
+            count == 3 -> 10.5f to 7
+            count == 4 -> 9.5f to 5
+            else -> 8.5f to 2
+        }
+
         fun refresh(context: Context) {
             runCatching {
                 context.sendBroadcast(
@@ -85,45 +102,76 @@ class TodayWidgetProvider : AppWidgetProvider() {
             return if (luma > 0.66) Color.parseColor("#4A3B00") else Color.WHITE
         }
 
-        /** 2026-11-17 → 「11月17日 周二」；日期串异常时退回「17日」+ 组件的 weekday */
-        private fun dateLabel(day: WidgetData.Day?): String {
-            if (day == null) return ""
-            val parts = day.ymd.split("-")
-            val month = parts.getOrNull(1)?.toIntOrNull()
-            val dom = parts.getOrNull(2)?.toIntOrNull() ?: day.dayOfMonth
-            val md = if (month == null) "${dom}日" else "${month}月${dom}日"
-            return "$md ${WidgetData.weekdayText(day.weekday)}"
+        /** 一个人一列：上=班次胶囊（班次色），下=姓名 */
+        private fun columnView(
+            context: Context,
+            name: String,
+            ban: String,
+            banSize: Float,
+            padDp: Int,
+            nameSize: Float
+        ): RemoteViews {
+            val col = RemoteViews(context.packageName, R.layout.widget_today_item)
+            val hex = if (ban.isBlank()) "" else hexOf(ban)
+            col.setTextViewText(R.id.i_ban, ban.ifBlank { "—" })
+            col.setInt(
+                R.id.i_ban,
+                "setBackgroundResource",
+                if (hex.isBlank()) R.drawable.pill_none else PILLS[hex] ?: R.drawable.pill_none
+            )
+            col.setTextColor(R.id.i_ban, textColor(hex))
+            col.setTextViewTextSize(R.id.i_ban, TypedValue.COMPLEX_UNIT_SP, banSize)
+            val d = context.resources.displayMetrics.density
+            col.setViewPadding(
+                R.id.i_ban,
+                (padDp * d).toInt(),
+                (2 * d).toInt(),
+                (padDp * d).toInt(),
+                (2 * d).toInt()
+            )
+            col.setTextViewText(R.id.i_name, name)
+            col.setTextViewTextSize(R.id.i_name, TypedValue.COMPLEX_UNIT_SP, nameSize)
+            return col
+        }
+
+        /** 人太多时的收尾列：灰色「+N」，姓名位留空（只表示还有多少人没显示） */
+        private fun moreView(context: Context, more: Int): RemoteViews {
+            val col = RemoteViews(context.packageName, R.layout.widget_today_item)
+            col.setTextViewText(R.id.i_ban, "+$more")
+            col.setInt(R.id.i_ban, "setBackgroundResource", R.drawable.pill_none)
+            col.setTextColor(R.id.i_ban, Color.parseColor(MUTED))
+            col.setTextViewTextSize(R.id.i_ban, TypedValue.COMPLEX_UNIT_SP, 8.5f)
+            col.setTextViewText(R.id.i_name, "")
+            return col
         }
 
         /** 供预览/调试复用：只负责把数据绑进 RemoteViews，不负责下发 */
         internal fun buildViews(context: Context): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.widget_today)
-            val week = runCatching { WidgetData.load(context) }.getOrNull()
-            val today = week?.days?.getOrNull(0)
-            val tomorrow = week?.days?.getOrNull(1)
-            // 还没有人员时 WidgetData 给的是空班次串，别显示成「一个空的胶囊」
-            val hasSchedule = week?.days?.any { it.ban.isNotBlank() } ?: false
+            val board = runCatching { WidgetData.loadToday(context) }.getOrNull()
+            val people = board?.people.orEmpty()
 
-            views.setTextViewText(R.id.t_person, week?.personName.orEmpty())
-            views.setTextViewText(R.id.t_date, dateLabel(today))
+            views.setTextViewText(R.id.t_date, board?.dateLabel.orEmpty())
+            views.removeAllViews(R.id.t_row)
 
-            val ban = today?.ban.orEmpty()
-            val hex = if (ban.isBlank()) "" else hexOf(ban)
-            views.setTextViewText(R.id.t_ban, ban.ifBlank { "—" })
-            views.setInt(
-                R.id.t_ban,
-                "setBackgroundResource",
-                if (hex.isBlank()) R.drawable.pill_none else PILLS[hex] ?: R.drawable.pill_none
-            )
-            views.setTextColor(R.id.t_ban, textColor(hex))
-
-            val nextBan = tomorrow?.ban.orEmpty()
-            val nextText = when {
-                !hasSchedule -> ""
-                nextBan.isBlank() -> "明天 待定"
-                else -> "明天 $nextBan"
+            if (people.isEmpty()) {
+                views.setViewVisibility(R.id.t_row, View.GONE)
+                views.setViewVisibility(R.id.t_empty, View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.t_row, View.VISIBLE)
+                views.setViewVisibility(R.id.t_empty, View.GONE)
+                val shown = if (people.size <= MAX_COLUMNS) people else people.take(MAX_COLUMNS - 1)
+                val (banSize, padDp) = banStyle(people.size)
+                val nameSize = if (people.size >= MAX_COLUMNS) 8f else 8.5f
+                shown.forEach { p ->
+                    views.addView(
+                        R.id.t_row,
+                        columnView(context, p.name, p.ban, banSize, padDp, nameSize)
+                    )
+                }
+                val hidden = people.size - shown.size
+                if (hidden > 0) views.addView(R.id.t_row, moreView(context, hidden))
             }
-            views.setTextViewText(R.id.t_next, nextText)
 
             val pi = PendingIntent.getActivity(
                 context,

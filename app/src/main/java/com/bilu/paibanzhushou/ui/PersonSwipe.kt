@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -24,6 +25,7 @@ import com.bilu.paibanzhushou.data.Person
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 
 /**
@@ -79,7 +81,12 @@ class PersonSwipeState(private val scope: CoroutineScope) {
 
     /**
      * 抬手结算：够了就补满整屏后换人，不够就回弹。
-     * 补满的同一帧里把 offset 归零、清掉预览、切换人员，观感上目标页直接落在正中。
+     *
+     * 换人的时机很关键：补满后目标页已经停在正中、主层整块滑出屏幕（看不见），
+     * 这时才 [onSwitch]，主层就能「在屏幕外」把新人员的日历重组好；等两帧再归零，
+     * 屏幕上从预览页交回主层时两边内容已经完全一致。
+     * 若像以前那样在同一帧里 offset 归零 + 换人，荣耀等机型上主层偶尔会晚一帧重组，
+     * 正中就会闪一帧旧人员的班次标签。
      */
     fun release(enough: Boolean, width: Float, onSwitch: (Person) -> Unit) {
         val target = peekPerson
@@ -90,10 +97,17 @@ class PersonSwipeState(private val scope: CoroutineScope) {
                 animate(offset, -sign * width, animationSpec = tween(260, easing = settleEasing)) { v, _ ->
                     offset = v
                 }
+                if (target != null) {
+                    onSwitch(target)
+                    // 等两帧让主层组合/布局完成；加超时是防止退到后台时等不到帧、swiping 卡在 true
+                    withTimeoutOrNull(240L) {
+                        withFrameNanos { }
+                        withFrameNanos { }
+                    }
+                }
                 offset = 0f
                 peekPerson = null
                 swiping = false
-                if (target != null) onSwitch(target)
             } else {
                 animate(offset, 0f, animationSpec = tween(220)) { v, _ ->
                     offset = v

@@ -9,7 +9,7 @@ Kotlin + Jetpack Compose 实现，无第三方运行时依赖——持久化用 
 JSON 用 org.json，农历/节气/节假日全部本地算。
 
 - 包名 / applicationId：`com.bilu.paibanzhushou`
-- 当前发布版本：**versionName 1.0.29，versionCode 129**
+- 当前发布版本：**versionName 1.0.30，versionCode 130**
 - minSdk 24（Android 7.0），targetSdk 37，Compose Material3
 
 ## 功能
@@ -24,19 +24,19 @@ JSON 用 org.json，农历/节气/节假日全部本地算。
 - **同事排班对比表**：一张表看完所有人的整月班次，左右滑动看全员，上下滑动看整月，今天一行自动高亮并滚动到眼前
 - **班次闹钟**：勾选要提醒的班次、给每个班次单独设时间，写入系统精确闹钟；到点全屏响铃页 + 循环铃声 + 震动 + 关闭 / 5 分钟后提醒；改排班、重启手机都会自动重写
 - **闹钟列表**：看清未来 60 天每天会不会响，可单独取消某一天（改排班、开机都不会把它加回来）
-- **桌面小组件**：4×2 大卡（7 天横排）、2×1 小卡（4 上 3 下）、2×1 今日班次卡（当前人员 + 今天日期星期 + 今日班次 + 明天预告），换人、改排班后自动刷新
+- **桌面小组件**：4×2 大卡（7 天横排）、2×1 小卡（4 上 3 下）、2×1 今日班次卡（所有人员今天的班次，一人一列，最多并排 5 人，超出显示 +N；人少时字与胶囊自动放大），换人、改排班后自动刷新
 - **本地保存，不上传**：数据只在你手机里，不注册、不登录、不联网也能看（除节假日标记外无需网络）
 
 ## 下载 / 官网
 
 | | |
 | --- | --- |
-| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.29.apk>（8,773,226 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.29/banbiaoxiaoli-1.0.29.apk> |
+| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.30.apk>（8,773,927 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.30/banbiaoxiaoli-1.0.30.apk> |
 | 官网（自有域名） | <https://qipaclub.top/paibanzhushou/> |
 | 官网（GitHub Pages） | <https://yueqiwu.github.io/paibanzhushou/> |
 | 源码 | <https://github.com/yueqiwu/paibanzhushou> |
-| 版本 / Release | v1.0.29（versionCode 129，正式签名） |
-| 包校验 | SHA-256 `56E7D59AAAE39B8775C543A286141013C6BEDF782C7D137A414E8C19B65851F8` |
+| 版本 / Release | v1.0.30（versionCode 130，正式签名） |
+| 包校验 | SHA-256 `DEE05BAF623E3DEA826CB97F365083A8F11046BA679AD23A8DABC636F75D5F32` |
 
 官网源码就是本仓库的 `docs/` 目录（纯静态 `index.html` + `style.css` + `img/`，全部相对路径），
 可直接整目录拷到任意静态站点的子路径下，例如 `qipaclub.top/paibanzhushou/`。

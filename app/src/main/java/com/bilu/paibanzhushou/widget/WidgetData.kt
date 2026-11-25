@@ -30,6 +30,12 @@ object WidgetData {
         val days: List<Day>
     )
 
+    /** 「全员今日班次」卡里的一列：一个人的姓名 + 今天上什么班 */
+    data class TodayPerson(val name: String, val ban: String)
+
+    /** 「全员今日班次」卡的数据：日期标题 + 每人一列 */
+    data class TodayBoard(val dateLabel: String, val people: List<TodayPerson>)
+
     private val WEEK = arrayOf("日", "一", "二", "三", "四", "五", "六")
 
     fun weekdayText(weekday: Int): String = "周" + WEEK[weekday.coerceIn(0, 6)]
@@ -77,6 +83,49 @@ object WidgetData {
                 Day(d, dayNumber(d), dayOfWeek(d), list.getOrNull(i)?.info.orEmpty())
             }
         )
+    }
+
+    /**
+     * 所有人员的「今天」：一人一次 [Schedule.buildSchedule]（startMs = endMs = 今天）。
+     *
+     * 顺序沿用 PeopleStore 里的顺序（= 首页人员标签的顺序），不按当前人员重排，
+     * 这样切人时卡片的列序不会跟着跳。
+     */
+    fun loadToday(context: Context): TodayBoard {
+        val today = Dates.todayStart()
+        val todayStr = Dates.formatYmd(today)
+        val people = runCatching {
+            PeopleStore.loadPeople(todayStr, listOf("白班", "中班", "休息", "休息"))
+        }.getOrDefault(emptyList())
+        val cache = runCatching { HolidayRepo.loadCache() }.getOrNull()
+
+        val columns = people.map { person ->
+            val ban = runCatching {
+                Schedule.buildSchedule(
+                    cycleBans = person.cycleBans,
+                    anchorDate = person.anchorDate,
+                    startMs = today,
+                    endMs = today,
+                    holiday = cache?.holiday ?: emptyList(),
+                    banList = cache?.banList ?: emptyList(),
+                    overrides = person.overrides,
+                    weekendRestBans = person.weekendRestBans,
+                    holidayRestBans = person.holidayRestBans,
+                    fallbackAnchorMs = today
+                )
+            }.getOrNull()?.firstOrNull()?.info.orEmpty()
+            TodayPerson(person.name, ban)
+        }
+
+        return TodayBoard(dateLabel(todayStr), columns)
+    }
+
+    /** 2026-11-17 → 「11月17日 周二」 */
+    private fun dateLabel(ymd: String): String {
+        val parts = ymd.split("-")
+        val month = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val dom = parts.getOrNull(2)?.toIntOrNull() ?: 0
+        return "${month}月${dom}日 " + weekdayText(dayOfWeek(ymd))
     }
 
     private fun dayOfWeek(date: String): Int {

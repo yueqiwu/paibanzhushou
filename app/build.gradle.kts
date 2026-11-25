@@ -50,8 +50,9 @@ android {
     // 1.0.27 修两个闹钟不跟排班走的问题：单日改成「休息」后旧闹钟撤不掉；闹钟页改完时间直接退出不生效
     // 1.0.28 华为/荣耀后台不响：加电池优化白名单、自启动/后台运行跳转，铃声服务起来失败时退回通知兜底
     // 1.0.29 人员列表左右滑不再切人；切人去掉了 alpha/缩放过渡（荣耀上抖一下）；新增 2×1「今日班次」桌面卡片
-        versionCode = 129
-        versionName = "1.0.29"
+    // 1.0.30 2×1 卡片改成「所有人员今天的班次」一人一列；切人时等主层换完再归位（荣耀上标签闪一下）
+        versionCode = 130
+        versionName = "1.0.30"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
