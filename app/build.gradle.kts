@@ -48,8 +48,10 @@ android {
     // 1.0.25 日期选择从三列滚轮改为日历格子（自绘）
     // 1.0.26 日期 / 月份 / 闹钟时间都换成 Android 系统原生弹窗（DatePickerDialog / TimePickerDialog）
     // 1.0.27 修两个闹钟不跟排班走的问题：单日改成「休息」后旧闹钟撤不掉；闹钟页改完时间直接退出不生效
-        versionCode = 128
-        versionName = "1.0.28"
+    // 1.0.28 华为/荣耀后台不响：加电池优化白名单、自启动/后台运行跳转，铃声服务起来失败时退回通知兜底
+    // 1.0.29 人员列表左右滑不再切人；切人去掉了 alpha/缩放过渡（荣耀上抖一下）；新增 2×1「今日班次」桌面卡片
+        versionCode = 129
+        versionName = "1.0.29"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -123,6 +123,8 @@ fun IndexScreen(
     val swipeScope = rememberCoroutineScope()
     val swipe = remember { PersonSwipeState(swipeScope) }
     var calendarBounds by remember { mutableStateOf<Rect?>(null) }
+    // 人员标签行（含「+ 新增」按钮）的屏幕范围：这一带要留给标签栏自己横滑，不能触发整页切人
+    var tabsBounds by remember { mutableStateOf<Rect?>(null) }
     val density = LocalDensity.current
     val dragging = state.dragController.dragging
     val currentPerson = state.people.firstOrNull { it.id == state.activePersonId }
@@ -140,6 +142,7 @@ fun IndexScreen(
                     swipe = swipe,
                     widthPx = { widthPx },
                     calendarBounds = { calendarBounds },
+                    tabsBounds = { tabsBounds },
                     // 注意：这里必须读实时状态。canSwipe 是组合期的普通 val，被手势协程捕获后
                     // 会永远停留在首帧（首次安装只有 1 个人员 → false），导致新增人员后滑不动。
                     enabled = {
@@ -159,7 +162,13 @@ fun IndexScreen(
 
             Column(Modifier.fillMaxWidth()) {
                 HeroCard(state, onOpenAlarmSettings)
-                ConfigCard(state, swipe, widthPx) { confettiOrigin = it }
+                ConfigCard(
+                    state = state,
+                    swipe = swipe,
+                    widthPx = widthPx,
+                    onTabsBounds = { tabsBounds = it },
+                    onConfettiOrigin = { confettiOrigin = it }
+                )
             }
             SwipeableCalendar(
                 state = state,
@@ -202,17 +211,12 @@ private fun SwipeableCalendar(
             .fillMaxWidth()
             .clipToBounds()
     ) {
-        val dragProgress = (kotlin.math.abs(swipe.offset) / widthPx.coerceAtLeast(1f)).coerceIn(0f, 1f)
         Box(
             Modifier
                 .fillMaxWidth()
-                .graphicsLayer {
-                    translationX = swipe.offset
-                    // 滑走的一页稍微淡一点、缩一点，滑进来的那页从 0.9 补到 1，转场更像「换页」而不是「平移」
-                    alpha = 1f - 0.12f * dragProgress
-                    scaleX = 1f - 0.012f * dragProgress
-                    scaleY = scaleX
-                }
+                // 只做位移，不做 alpha / scale 渐变：收尾时 offset 归零、内容同时换成新人员，
+                // 此时 alpha 若还要从 0.88 补回 1，那一帧就是明显的「闪一下」（部分机型更明显）
+                .graphicsLayer { translationX = swipe.offset }
         ) {
             // CalendarSection 会发出两个并列的布局节点（标题列 + 日历卡），这里必须用 Column 包一层，
             // 直接塞进 Box 会让标题和图例被日历卡盖住
@@ -232,10 +236,7 @@ private fun SwipeableCalendar(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .graphicsLayer {
-                        translationX = swipe.offset + swipe.peekSign * widthPx
-                        alpha = 0.9f + 0.1f * dragProgress
-                    }
+                    .graphicsLayer { translationX = swipe.offset + swipe.peekSign * widthPx }
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     CalendarSection(
@@ -456,6 +457,7 @@ private fun ConfigCard(
     state: IndexState,
     swipe: PersonSwipeState,
     widthPx: Float,
+    onTabsBounds: (Rect) -> Unit,
     onConfettiOrigin: (Offset) -> Unit
 ) {
     GlassCard(
@@ -506,7 +508,7 @@ private fun ConfigCard(
             }
         }
 
-        PeopleTabs(state, swipe, widthPx)
+        PeopleTabs(state, swipe, widthPx, onTabsBounds)
 
         androidx.compose.animation.AnimatedVisibility(
             visible = state.configOpen,
@@ -521,7 +523,12 @@ private fun ConfigCard(
 }
 
 @Composable
-private fun PeopleTabs(state: IndexState, swipe: PersonSwipeState, widthPx: Float) {
+private fun PeopleTabs(
+    state: IndexState,
+    swipe: PersonSwipeState,
+    widthPx: Float,
+    onTabsBounds: (Rect) -> Unit
+) {
     val controller = state.dragController
     val lazyState = rememberLazyListState()
     // 拖动切人的进度：当前人员的选中态随手指淡出、目标人员同步淡入，
@@ -553,7 +560,9 @@ private fun PeopleTabs(state: IndexState, swipe: PersonSwipeState, widthPx: Floa
         state = lazyState,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = Rpx.dp(10)),
+            .padding(top = Rpx.dp(10))
+            // 把整排标签（含右侧「+ 新增」）的位置报给外层手势：按在这里只横滑标签，不切人
+            .onGloballyPositioned { onTabsBounds(it.boundsInRoot()) },
         verticalAlignment = Alignment.CenterVertically
     ) {
         itemsIndexed(state.people, key = { _, p -> p.id }) { index, person ->

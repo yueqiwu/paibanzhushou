@@ -111,6 +111,7 @@ class PersonSwipeState(private val scope: CoroutineScope) {
  *
  * 命中排除：
  * - 按在日历区域内 → 交给日历自己的翻月手势；
+ * - 按在人员标签行内 → 交给标签栏自己的横向滚动（否则想滑标签就会切人）；
  * - 起手点被别的组件消费了（按钮、人员标签的横向滚动等）→ 直接放行；
  * - 竖向位移先超过横向 → 交给页面竖向滚动。
  */
@@ -120,6 +121,7 @@ fun Modifier.personSwipeSwitch(
     swipe: PersonSwipeState,
     widthPx: () -> Float,
     calendarBounds: () -> Rect?,
+    tabsBounds: () -> Rect?,
     enabled: () -> Boolean,
     onSwitch: (Person) -> Unit
 ): Modifier {
@@ -129,6 +131,7 @@ fun Modifier.personSwipeSwitch(
     // rememberUpdatedState 把每帧最新的回调转给手势协程。
     val currentEnabled = rememberUpdatedState(enabled)
     val currentBounds = rememberUpdatedState(calendarBounds)
+    val currentTabsBounds = rememberUpdatedState(tabsBounds)
     val currentWidth = rememberUpdatedState(widthPx)
     val currentOnSwitch = rememberUpdatedState(onSwitch)
 
@@ -154,6 +157,9 @@ fun Modifier.personSwipeSwitch(
         if (!currentEnabled.value()) return@awaitEachGesture
         val bounds = currentBounds.value()
         if (bounds != null && bounds.contains(down.position)) return@awaitEachGesture
+        // 人员标签行要留给它自己的横向滚动：手指落在标签上时绝不切人
+        val tabs = currentTabsBounds.value()
+        if (tabs != null && tabs.contains(down.position)) return@awaitEachGesture
         val width = (currentWidth.value().takeIf { it > 1f } ?: size.width.toFloat())
         if (width <= 1f) return@awaitEachGesture
         val threshold = (width * 0.12f).coerceIn(thresholdMin, thresholdMax)

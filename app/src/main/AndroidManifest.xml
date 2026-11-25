@@ -55,6 +55,18 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_info_compact" />
         </receiver>
+        <!-- 桌面小组件：当前人员今天的班次 + 明天预告 -->
+        <receiver
+            android:name=".widget.TodayWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.bilu.paibanzhushou.action.WIDGET_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_today" />
+        </receiver>
         <receiver
             android:name=".widget.ScheduleWidgetProvider"
             android:exported="true">

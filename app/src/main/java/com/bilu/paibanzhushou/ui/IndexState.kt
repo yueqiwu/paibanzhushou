@@ -97,6 +97,12 @@ class IndexState(
         const val PERM_FSI = "fsi"
         const val PERM_BATTERY = "battery"
         const val PERM_AUTOSTART = "autostart"
+
+        /**
+         * 切人后把「重写闹钟 + 刷新桌面小组件」推迟到收尾动画之后（收尾 260ms）再跑。
+         * 这两件事都在主线程做几十次 Binder / RemoteViews，和动画抢同一帧时弱机会掉帧闪一下。
+         */
+        const val SWITCH_SYNC_DELAY_MS = 360L
     }
 
     val dragController = DragSortController()
@@ -196,6 +202,8 @@ class IndexState(
         private set
 
     private var saveJob: Job? = null
+    /** 切人后的延迟同步（闹钟 + 小组件），连续快切只保留最后一次 */
+    private var switchSyncJob: Job? = null
     private var confettiJob: Job? = null
     private var remoteJob: Job? = null
 
@@ -267,6 +275,14 @@ class IndexState(
             saveJob?.cancel()
             saveJob = null
             savePeople()
+        }
+        // 切人后还没同步闹钟/小组件就退到后台：这里补一次，
+        // 否则会出现「首页显示的是 A，闹钟/桌面卡片还是 B」
+        if (switchSyncJob != null) {
+            switchSyncJob?.cancel()
+            switchSyncJob = null
+            if (alarmConfig.enabled) resyncAlarms()
+            ScheduleWidgetProvider.refresh(context)
         }
     }
 
@@ -394,11 +410,37 @@ class IndexState(
 
     fun setActivePerson(id: String) {
         if (id.isEmpty() || id == activePersonId) return
+        // 切人只换「首页看谁」：周期、锚点、班次都没变，没必要走 generateSchedule 的完整流程。
+        // 之前的完整流程会在这一帧同步重写几十个系统闹钟并构建小组件 RemoteViews，
+        // 和 260ms 收尾动画抢主线程，弱机上就是「切人时日历抖一下 / 闪一下」。
         persistFormToActivePerson()
-        scheduleSave()
         activePersonId = id
         applyActivePersonToForm()
-        generateSchedule()
+        // 立即落盘（activePersonId 也在里面），并发版与小组件随后要按新人员算
+        savePeopleNow()
+        scheduleVersion++
+        windowCache.clear()
+        personWindowCache.clear()
+        refreshTodayShift()
+        // 闹钟与桌面小组件延到动画结束后再同步：闹钟只在「跟随当前人员」时才受影响，
+        // 但一次重写要 cancel + setAlarmClock 几十个 PendingIntent，放动画里必掉帧
+        scheduleSwitchSync()
+    }
+
+    /**
+     * 切人后的延迟同步：重写闹钟 + 刷新桌面小组件。
+     * 连续快速切人时 cancel 掉上一次，只跑最后一次，避免重复做几十次 Binder 调用。
+     */
+    private fun scheduleSwitchSync() {
+        switchSyncJob?.cancel()
+        switchSyncJob = scope.launch {
+            delay(SWITCH_SYNC_DELAY_MS)
+            // 排班一变，闹钟对应的工作日也变了，跟着重写（开关没开就什么都不做）
+            if (alarmConfig.enabled) resyncAlarms()
+            // 桌面小组件显示的是同一份排班，顺手刷一下
+            ScheduleWidgetProvider.refresh(context)
+            switchSyncJob = null
+        }
     }
 
     /** 消费一次「聚焦人员名称」请求，避免页面重新进入时重复触发 */
