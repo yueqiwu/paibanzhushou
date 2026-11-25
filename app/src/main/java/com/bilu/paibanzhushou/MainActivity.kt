@@ -6,6 +6,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.bilu.paibanzhushou.data.Store
+import com.bilu.paibanzhushou.data.UsageStats
 import com.bilu.paibanzhushou.ui.AppRoot
 import com.bilu.paibanzhushou.ui.theme.PaibanzhushouTheme
 
@@ -13,6 +14,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Store.init(this)
+        UsageStats.ping(this)   // 匿名使用统计：只在后台网页看，界面无任何痕迹
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(
                 android.graphics.Color.TRANSPARENT,
