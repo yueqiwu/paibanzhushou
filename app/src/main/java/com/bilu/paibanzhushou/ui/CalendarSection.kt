@@ -90,7 +90,9 @@ fun CalendarSection(
     person: Person? = null,
     interactive: Boolean = true,
     /** 只把「月历卡」的位置回报给首页：整卡之外（标题/图例/月份栏）要留给左右滑动切人 */
-    onGridBounds: ((Rect) -> Unit)? = null
+    onGridBounds: ((Rect) -> Unit)? = null,
+    /** 班次图例行的位置：这一行自己横向滚动，不能让首页的切人手势抢走 */
+    onLegendBounds: ((Rect) -> Unit)? = null
 ) {
     Column(Modifier.fillMaxWidth().padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(16))) {
         Row(
@@ -123,7 +125,10 @@ fun CalendarSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = Rpx.dp(8))
-                .horizontalScroll(rememberScrollState()),
+                .horizontalScroll(rememberScrollState())
+                .onGloballyPositioned { coords ->
+                    onLegendBounds?.invoke(coords.boundsInRoot())
+                },
             horizontalArrangement = Arrangement.spacedBy(Rpx.dp(7)),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -132,6 +137,8 @@ fun CalendarSection(
             }
             LegendTagItem(tag = "假", tagColor = Color(0xFFFF0000), name = "节假日")
             LegendTagItem(tag = "班", tagColor = Color(0xFFFF9800), name = "调班")
+            // 尾部留一点空隙：滑到最右时最后一枚胶囊不会贴着屏幕边缘
+            Spacer(Modifier.width(Rpx.dp(10)))
         }
     }
 

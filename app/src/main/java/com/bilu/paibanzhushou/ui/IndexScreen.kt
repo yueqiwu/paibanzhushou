@@ -125,6 +125,8 @@ fun IndexScreen(
     var calendarBounds by remember { mutableStateOf<Rect?>(null) }
     // 人员标签行（含「+ 新增」按钮）的屏幕范围：这一带要留给标签栏自己横滑，不能触发整页切人
     var tabsBounds by remember { mutableStateOf<Rect?>(null) }
+    // 班次图例行的范围：班次多时这一行要能左右滑，同样不能触发切人
+    var legendBounds by remember { mutableStateOf<Rect?>(null) }
     val density = LocalDensity.current
     val dragging = state.dragController.dragging
     val currentPerson = state.people.firstOrNull { it.id == state.activePersonId }
@@ -143,6 +145,7 @@ fun IndexScreen(
                     widthPx = { widthPx },
                     calendarBounds = { calendarBounds },
                     tabsBounds = { tabsBounds },
+                    legendBounds = { legendBounds },
                     // 注意：这里必须读实时状态。canSwipe 是组合期的普通 val，被手势协程捕获后
                     // 会永远停留在首帧（首次安装只有 1 个人员 → false），导致新增人员后滑不动。
                     enabled = {
@@ -176,7 +179,8 @@ fun IndexScreen(
                 currentPerson = currentPerson,
                 widthPx = widthPx,
                 onOpenMemberTable = onOpenMemberTable,
-                onGridBounds = { calendarBounds = it }
+                onGridBounds = { calendarBounds = it },
+                onLegendBounds = { legendBounds = it }
             )
             CopyrightFooter(state)
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
@@ -204,7 +208,8 @@ private fun SwipeableCalendar(
     currentPerson: Person?,
     widthPx: Float,
     onOpenMemberTable: () -> Unit,
-    onGridBounds: (Rect) -> Unit
+    onGridBounds: (Rect) -> Unit,
+    onLegendBounds: (Rect) -> Unit
 ) {
     Box(
         Modifier
@@ -226,8 +231,10 @@ private fun SwipeableCalendar(
                     onOpenMemberTable = onOpenMemberTable,
                     person = currentPerson,
                     interactive = true,
-                    // 只有月历卡本身吃掉横滑（翻月）；标题、图例、月份栏都交给外层切人
-                    onGridBounds = onGridBounds
+                    // 只有月历卡本身吃掉横滑（翻月）；标题、月份栏交给外层切人，
+                    // 图例自己横向滚动（班次一多就溢出）
+                    onGridBounds = onGridBounds,
+                    onLegendBounds = onLegendBounds
                 )
             }
         }

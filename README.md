@@ -9,7 +9,7 @@ Kotlin + Jetpack Compose 实现，无第三方运行时依赖——持久化用 
 JSON 用 org.json，农历/节气/节假日全部本地算。
 
 - 包名 / applicationId：`com.bilu.paibanzhushou`
-- 当前发布版本：**versionName 1.0.30，versionCode 130**
+- 当前发布版本：**versionName 1.0.31，versionCode 131**
 - minSdk 24（Android 7.0），targetSdk 37，Compose Material3
 
 ## 功能
@@ -17,7 +17,7 @@ JSON 用 org.json，农历/节气/节假日全部本地算。
 - **周期排班**：任意天数的班次周期 + 锚点日期，之后按顺序无限循环，日历自动铺满
 - **不限年份**：往前翻、往后翻到任何年份、任何月份，班次都能正常显示
 - **多人独立配置**：每个人一套班次、周期、锚点；长按人员名称可拖拽排序，点 × 删除
-- **整页左右滑动切人**：在首页任意位置右滑 / 左滑切到上一位 / 下一位；人员标签行内左右滑只横向滚动标签、不切人，日期网格保留左右滑翻月
+- **整页左右滑动切人**：在首页任意位置右滑 / 左滑切到上一位 / 下一位；人员标签行、班次图例行内左右滑只横向滚动自己的内容（班次再多也不会被裁掉）、不切人，日期网格保留左右滑翻月
 - **单日微调**：临时调班只改一天，单指指定当天班次，或者清除这一天的设置，周期本身不受影响
 - **周末 / 节假日自动休息**：指定某些班次落在周六日或法定节假日时自动改休息
 - **农历 · 节气 · 节日**：每个格子里有农历日期、传统节日、二十四节气、公历节日；法定节假日标「假」，调休上班标「班」
@@ -31,12 +31,12 @@ JSON 用 org.json，农历/节气/节假日全部本地算。
 
 | | |
 | --- | --- |
-| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.30.apk>（8,773,927 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.30/banbiaoxiaoli-1.0.30.apk> |
+| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.31.apk>（8,790,311 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.31/banbiaoxiaoli-1.0.31.apk> |
 | 官网（自有域名） | <https://qipaclub.top/paibanzhushou/> |
 | 官网（GitHub Pages） | <https://yueqiwu.github.io/paibanzhushou/> |
 | 源码 | <https://github.com/yueqiwu/paibanzhushou> |
-| 版本 / Release | v1.0.30（versionCode 130，正式签名） |
-| 包校验 | SHA-256 `DEE05BAF623E3DEA826CB97F365083A8F11046BA679AD23A8DABC636F75D5F32` |
+| 版本 / Release | v1.0.31（versionCode 131，正式签名） |
+| 包校验 | SHA-256 `8486885301FE45C368D9D60010DEBC36294D336CFA2E182B2695AA5DAD9BE152` |
 
 官网源码就是本仓库的 `docs/` 目录（纯静态 `index.html` + `style.css` + `img/`，全部相对路径），
 可直接整目录拷到任意静态站点的子路径下，例如 `qipaclub.top/paibanzhushou/`。

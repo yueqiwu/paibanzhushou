@@ -136,6 +136,8 @@ fun Modifier.personSwipeSwitch(
     widthPx: () -> Float,
     calendarBounds: () -> Rect?,
     tabsBounds: () -> Rect?,
+    /** 班次图例那一行：班次多到一行放不下时要左右滑，这一带不能触发整页切人 */
+    legendBounds: (() -> Rect?)? = null,
     enabled: () -> Boolean,
     onSwitch: (Person) -> Unit
 ): Modifier {
@@ -146,6 +148,7 @@ fun Modifier.personSwipeSwitch(
     val currentEnabled = rememberUpdatedState(enabled)
     val currentBounds = rememberUpdatedState(calendarBounds)
     val currentTabsBounds = rememberUpdatedState(tabsBounds)
+    val currentLegendBounds = rememberUpdatedState(legendBounds)
     val currentWidth = rememberUpdatedState(widthPx)
     val currentOnSwitch = rememberUpdatedState(onSwitch)
 
@@ -174,6 +177,9 @@ fun Modifier.personSwipeSwitch(
         // 人员标签行要留给它自己的横向滚动：手指落在标签上时绝不切人
         val tabs = currentTabsBounds.value()
         if (tabs != null && tabs.contains(down.position)) return@awaitEachGesture
+        // 班次图例行同理：班次一多就会横向溢出，得让它自己的 horizontalScroll 接管
+        val legend = currentLegendBounds.value?.invoke()
+        if (legend != null && legend.contains(down.position)) return@awaitEachGesture
         val width = (currentWidth.value().takeIf { it > 1f } ?: size.width.toFloat())
         if (width <= 1f) return@awaitEachGesture
         val threshold = (width * 0.12f).coerceIn(thresholdMin, thresholdMax)
