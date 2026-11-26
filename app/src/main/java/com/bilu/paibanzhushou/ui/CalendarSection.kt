@@ -115,7 +115,10 @@ fun CalendarSection(
         null
     } else {
         val above = with(density) { (gridTopPx!! - sectionTopPx!!).toDp() }
-        ((availableHeight - above - Rpx.dp(GRID_CHROME_RPX)) / 6f).coerceIn(Rpx.dp(30), Rpx.dp(66))
+        // 上下限必须用真实 dp：早期误写成 Rpx.dp(…)，在正常分辨率（Rpx.scale≈0.48）上
+        // 上限只有 32dp，行高被压死、整月只占半屏，日历下方留出一大片空白。
+        // 下限 30dp 保证矮屏也塞得进一屏；上限 110dp 只防平板这种超高屏把行拉得过空。
+        ((availableHeight - above - Rpx.dp(GRID_CHROME_RPX)) / 6f).coerceIn(30.dp, 110.dp)
     }
     Column(
         Modifier
