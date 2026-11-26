@@ -34,6 +34,12 @@ object Migrate {
     /** 首启引导点过「稍后」的标记；不复用 [KEY_MIGRATED]，深链/剪贴板入口仍然可用 */
     const val KEY_GUIDE_DISMISSED = "paiban_migrate_guide_dismissed_v1"
 
+    /** 用户手动关掉「误导入？恢复导入前的数据」这一行 */
+    const val KEY_RESTORE_HINT_DISMISSED = "paiban_restore_hint_dismissed_v1"
+
+    /** 上一次展示恢复提示对应的是哪一份快照（存快照时间戳），同一份只提示一次 */
+    const val KEY_RESTORE_HINT_SHOWN = "paiban_restore_hint_shown_v1"
+
     /** 旧版包名 */
     const val LEGACY_PACKAGE = "com.paibanzhushou.wyq"
 
@@ -115,6 +121,34 @@ object Migrate {
     fun backupTime(): Long {
         val raw = Store.readStringOrNull(KEY_BACKUP) ?: return 0L
         return runCatching { JSONObject(raw).optLong("at", 0L) }.getOrDefault(0L)
+    }
+
+    /** 用户是否已经把恢复提示关掉了 */
+    fun restoreHintDismissed(): Boolean =
+        !Store.readStringOrNull(KEY_RESTORE_HINT_DISMISSED).isNullOrEmpty()
+
+    fun dismissRestoreHint() {
+        Store.writeRaw(KEY_RESTORE_HINT_DISMISSED, System.currentTimeMillis().toString())
+    }
+
+    /** 已经为哪一份快照提示过 */
+    private fun restoreHintShownFor(): Long =
+        Store.readStringOrNull(KEY_RESTORE_HINT_SHOWN)?.toLongOrNull() ?: 0L
+
+    fun markRestoreHintShown() {
+        Store.writeRaw(KEY_RESTORE_HINT_SHOWN, backupTime().toString())
+    }
+
+    /**
+     * 底部「误导入？恢复导入前的数据」只在刚导入那会儿露一次：
+     * 有快照、没被关掉、还没为这份快照提示过、且快照是 24 小时内建的。
+     * 之后想再找回入口，走「排班设置 → 展开 → 从剪贴板导入旧版数据」。
+     */
+    fun shouldShowRestoreHint(): Boolean {
+        if (!hasBackup() || restoreHintDismissed()) return false
+        val at = backupTime()
+        if (at <= 0L || at == restoreHintShownFor()) return false
+        return System.currentTimeMillis() - at < 24L * 60 * 60 * 1000
     }
 
     /**

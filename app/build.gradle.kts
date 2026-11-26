@@ -63,8 +63,10 @@ android {
     //        改为真实 dp（30–110dp），正常机行高回到约 60dp，5.5 英寸仍一屏
     // 1.0.37 闹钟权限新增「锁屏显示」一项（ColorOS 把它放在隐私 → 全部权限里），
     //        跳不过去时弹说明写清本机路径；顺带把「全屏通知」的说明和它区分开
-        versionCode = 137
-        versionName = "1.0.37"
+    // 1.0.38 「误导入？恢复导入前的数据」不再常驻：只在刚导入 24 小时内提示一次，可点「关闭」收起；
+    //        「从剪贴板导入旧版数据」改成常驻入口（排班设置展开区底部 + 页脚），首启引导关掉后也找得回
+        versionCode = 138
+        versionName = "1.0.38"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

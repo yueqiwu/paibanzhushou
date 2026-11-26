@@ -191,6 +191,14 @@ fun AppRoot() {
                         onOpenAlarmSettings = {
                             indexState.flush()
                             route = "alarmSettings"
+                        },
+                        onImportLegacy = {
+                            val p = Migrate.parseClipboard(context)
+                            if (p == null) {
+                                toastHost.show("剪贴板里没有迁移数据")
+                            } else {
+                                migratePayloadJson = Migrate.encodePayload(p)
+                            }
                         }
                     )
                 }

@@ -121,7 +121,8 @@ import kotlin.math.roundToInt
 fun IndexScreen(
     state: IndexState,
     onOpenMemberTable: () -> Unit,
-    onOpenAlarmSettings: () -> Unit
+    onOpenAlarmSettings: () -> Unit,
+    onImportLegacy: () -> Unit
 ) {
     val scrollState = rememberScrollState()
     var confettiOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -183,6 +184,7 @@ fun IndexScreen(
                     swipe = swipe,
                     widthPx = widthPx,
                     onOpenAlarmSettings = onOpenAlarmSettings,
+                    onImportLegacy = onImportLegacy,
                     onTabsBounds = { tabsBounds = it },
                     onConfettiOrigin = { confettiOrigin = it },
                     onHeight = { headerHeight = it }
@@ -200,6 +202,7 @@ fun IndexScreen(
             )
             CopyrightFooter(
                 state = state,
+                onImportLegacy = onImportLegacy,
                 modifier = Modifier.onGloballyPositioned {
                     footerHeight = with(density) { it.size.height.toDp() }
                 }
@@ -352,6 +355,7 @@ private fun HeaderCard(
     swipe: PersonSwipeState,
     widthPx: Float,
     onOpenAlarmSettings: () -> Unit,
+    onImportLegacy: () -> Unit,
     onTabsBounds: (Rect) -> Unit,
     onConfettiOrigin: (Offset) -> Unit,
     onHeight: (Dp) -> Unit
@@ -460,7 +464,7 @@ private fun HeaderCard(
             exit = shrinkVertically(tween(280)) + fadeOut(tween(200))
         ) {
             Column(Modifier.fillMaxWidth()) {
-                ConfigBody(state, onConfettiOrigin)
+                ConfigBody(state, onConfettiOrigin, onImportLegacy)
             }
         }
     }
@@ -689,7 +693,8 @@ private fun PeopleTabs(
 @Composable
 private fun ConfigBody(
     state: IndexState,
-    onConfettiOrigin: (Offset) -> Unit
+    onConfettiOrigin: (Offset) -> Unit,
+    onImportLegacy: () -> Unit
 ) {
     val nameFocus = remember { FocusRequester() }
     var showAnchorPicker by remember { mutableStateOf(false) }
@@ -849,6 +854,24 @@ private fun ConfigBody(
                 )
             }
         }
+
+        // 旧版数据导入入口：首启引导点过「稍后」之后，用户仍能在这里找回来
+        Text(
+            text = "从剪贴板导入旧版数据 ›",
+            fontSize = Rpx.sp(22),
+            color = C.blue,
+            modifier = Modifier
+                .padding(top = Rpx.dp(20))
+                .clickable { onImportLegacy() }
+                .padding(vertical = Rpx.dp(2))
+        )
+        Text(
+            text = "在旧版里复制迁移数据后点这里，导入前会自动备份当前数据",
+            fontSize = Rpx.sp(19),
+            color = C.hint,
+            lineHeight = Rpx.sp(28),
+            modifier = Modifier.padding(top = Rpx.dp(4))
+        )
     }
 
     DatePickerLauncher(
@@ -1009,10 +1032,20 @@ private fun RestSettingRow(
 /* ---------------- 版权 ---------------- */
 
 @Composable
-private fun CopyrightFooter(state: IndexState, modifier: Modifier = Modifier) {
-    // 导入过旧版数据时留了个撤销口：误点导入还能把导入前的数据恢复回来
-    var backupAvailable by remember { mutableStateOf(Migrate.hasBackup()) }
+private fun CopyrightFooter(
+    state: IndexState,
+    onImportLegacy: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // 导入过旧版数据时留了个撤销口：误点导入还能把导入前的数据恢复回来。
+    // 只在新导入后的 24 小时内提示一次（同一份快照不重复提示），用户可以点「关闭」永久收起。
+    var showRestoreHint by remember { mutableStateOf(false) }
     var confirmRestore by remember { mutableStateOf(false) }
+    LaunchedEffect(state.scheduleVersion) {
+        val show = Migrate.shouldShowRestoreHint()
+        showRestoreHint = show
+        if (show) Migrate.markRestoreHintShown()
+    }
     // 版权与版本合成一行，省掉原先三行文字占的高度（开屏要看完整月历）
     Column(
         modifier
@@ -1047,16 +1080,51 @@ private fun CopyrightFooter(state: IndexState, modifier: Modifier = Modifier) {
                     .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
             )
         }
-        if (backupAvailable) {
+        if (showRestoreHint) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = Rpx.dp(6)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "误导入？恢复导入前的数据",
+                    fontSize = Rpx.sp(19),
+                    color = Color(0xCCE5534B),
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(Rpx.dp(8)))
+                        .clickable { confirmRestore = true }
+                        .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
+                )
+                Text(
+                    text = "关闭",
+                    fontSize = Rpx.sp(19),
+                    color = Color(0x660B1020),
+                    maxLines = 1,
+                    modifier = Modifier
+                        .padding(start = Rpx.dp(12))
+                        .clip(RoundedCornerShape(Rpx.dp(8)))
+                        .clickable {
+                            Migrate.dismissRestoreHint()
+                            showRestoreHint = false
+                        }
+                        .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
+                )
+            }
+        }
+        // 迁移入口常驻在页脚一次，首启引导被关掉之后也找得回来
+        if (!Migrate.alreadyMigrated()) {
             Text(
-                text = "误导入？恢复导入前的数据",
+                text = "从旧版导入数据",
                 fontSize = Rpx.sp(19),
-                color = Color(0xCCE5534B),
+                color = Color(0xCC4A90E2),
                 maxLines = 1,
                 modifier = Modifier
                     .padding(top = Rpx.dp(6))
                     .clip(RoundedCornerShape(Rpx.dp(8)))
-                    .clickable { confirmRestore = true }
+                    .clickable { onImportLegacy() }
                     .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
             )
         }
@@ -1072,7 +1140,7 @@ private fun CopyrightFooter(state: IndexState, modifier: Modifier = Modifier) {
                     onClick = {
                         confirmRestore = false
                         val result = Migrate.restoreBackup()
-                        backupAvailable = Migrate.hasBackup()
+                        showRestoreHint = false
                         if (result.ok) state.reloadAfterMigrate()
                         state.toastMsg(result.message)
                     }
