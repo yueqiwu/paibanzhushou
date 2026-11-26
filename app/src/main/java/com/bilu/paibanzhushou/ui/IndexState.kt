@@ -56,6 +56,13 @@ data class AlarmPermission(
     val hintOnly: Boolean = false
 )
 
+/** 系统设置页点不进去时的说明弹窗（path 已写清本机怎么走） */
+data class PermGuide(
+    val title: String,
+    val content: String,
+    val action: String = "打开设置"
+)
+
 /** 确认弹窗 */
 data class ConfirmState(
     val title: String,
@@ -133,6 +140,10 @@ class IndexState(
 
     /** 权限状态的刷新计数：系统设置里改完回来要重新读一遍 */
     var permissionTick by mutableIntStateOf(0)
+        private set
+
+    /** 某个权限页打不开时的说明弹窗（null = 不显示） */
+    var permGuide by mutableStateOf<PermGuide?>(null)
         private set
 
     var anchorDate by mutableStateOf(Dates.formatYmd(Dates.todayStart()))
@@ -1114,17 +1125,58 @@ class IndexState(
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
                 app
             )
-            // 国产 ROM 的「自启动 / 后台运行」没有统一入口，逐个试各家的设置页，都打不开就落到应用详情
+            // 国产 ROM 的「自启动 / 后台运行」没有统一入口，逐个试各家的设置页
             // 「后台弹出界面」是厂商私有开关，没有可直达的页面，只落到应用详情让用户自己找
             PERM_BG_POPUP -> listOf(app)
-            PERM_AUTOSTART -> autostartIntents() + app
+            PERM_AUTOSTART -> autostartIntents()
             else -> listOf(app)
         }
         for (i in candidates) {
             val ok = runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
             if (ok) return
         }
+        // 自启动页在多数国产 ROM 上被系统锁着（只有「设置」能启），再静默跳应用详情会让人以为点了没反应，
+        // 改成弹说明写清本机怎么走
+        if (id == PERM_AUTOSTART) {
+            permGuide = autostartGuide()
+            return
+        }
+        runCatching { context.startActivity(app.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
+
+    fun dismissPermGuide() {
+        permGuide = null
+    }
+
+    /** 说明弹窗里的「打开设置」：只到系统设置首页，用户按文案自己往下走 */
+    fun openSystemSettings() {
+        permGuide = null
+        runCatching {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { toast("请手动打开系统设置") }
+    }
+
+    /** 这台机器上「自启动」页在哪（跳不过去时写进说明弹窗） */
+    private fun autostartPath(): String {
+        val brand = (Build.MANUFACTURER + " " + Build.BRAND).lowercase(java.util.Locale.ROOT)
+        return when {
+            brand.contains("oneplus") || brand.contains("oppo") || brand.contains("realme") ||
+                brand.contains("oplus") -> "设置 → 应用 → 自启动"
+            brand.contains("honor") || brand.contains("huawei") -> "设置 → 应用 → 应用启动管理"
+            brand.contains("xiaomi") || brand.contains("redmi") -> "设置 → 应用设置 → 授权管理 → 自启动管理"
+            brand.contains("vivo") || brand.contains("iqoo") -> "设置 → 应用与权限 → 权限管理 → 自启动"
+            brand.contains("meizu") -> "设置 → 应用管理 → 权限管理 → 自启动"
+            else -> "设置 → 应用 → 自启动 / 应用启动管理"
+        }
+    }
+
+    private fun autostartGuide(): PermGuide = PermGuide(
+        title = "需要手动打开「自启动」",
+        content = "这台手机不允许其他 App 直接跳到「自启动」页，只能你自己走一步：\n\n" +
+            autostartPath() + " → 找到「班表小历」→ 打开。\n\n" +
+            "同一页的「关联启动」（有的机型叫「允许后台活动」）也建议一起打开，" +
+            "否则划掉后台之后闹钟可能不响。"
+    )
 
     /** 各家 ROM 的「自启动 / 后台运行」管理页（打不开就抛异常，由外层 runCatching 兜住） */
     private fun autostartIntents(): List<Intent> {
@@ -1132,6 +1184,10 @@ class IndexState(
             "com.hihonor.systemmanager" to "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
             "com.huawei.systemmanager" to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
             "com.miui.securitycenter" to "com.miui.permcenter.autostart.AutoStartManagementActivity",
+            // ColorOS / realme UI / 一加：组件被 signature 级 oplus.permission.OPLUS_COMPONENT_SAFE 锁着，
+            // 通常只有系统「设置」能启；留着是万一某个 ROM 版本放开就能直达
+            "com.oplus.battery" to "com.oplus.startupapp.view.StartupAppListActivity",
+            "com.oplus.safecenter" to "com.oplus.safecenter.permission.startup.StartupAppListActivity",
             "com.coloros.safecenter" to "com.coloros.safecenter.permission.startup.StartupAppListActivity",
             "com.oppo.safe" to "com.oppo.safe.permission.startup.StartupAppListActivity",
             "com.vivo.permissionmanager" to "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",

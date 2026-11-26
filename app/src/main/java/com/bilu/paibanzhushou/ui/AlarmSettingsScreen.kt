@@ -29,9 +29,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -432,6 +434,39 @@ fun AlarmSettingsScreen(
             state.setAlarmRingtone(value)
         }
     )
+
+    // 系统设置页跳不过去（国产 ROM 常见的「自启动」页）时的说明弹窗
+    state.permGuide?.let { guide ->
+        AlertDialog(
+            onDismissRequest = { state.dismissPermGuide() },
+            title = {
+                Text(
+                    guide.title,
+                    fontSize = Rpx.sp(26),
+                    fontWeight = FontWeight.Medium
+                )
+            },
+            text = {
+                Text(
+                    guide.content,
+                    fontSize = Rpx.sp(22),
+                    lineHeight = Rpx.sp(32),
+                    color = Color(0xFF444444)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { state.openSystemSettings() }) {
+                    Text(guide.action, fontSize = Rpx.sp(23), color = C.blue)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { state.dismissPermGuide() }) {
+                    Text("知道了", fontSize = Rpx.sp(23), color = C.hint)
+                }
+            },
+            containerColor = Color.White
+        )
+    }
 }
 
 /** 一项闹钟权限：标题 + 说明 + 「已开启 / 去设置」 */

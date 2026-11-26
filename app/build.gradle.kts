@@ -57,8 +57,10 @@ android {
     //        引导只在原生版还没数据时出现，点「稍后」不再每次冷启动重弹
     // 1.0.34 导入旧版数据后闹钟页「为谁写闹钟」会一个都不高亮：绑定人员失效时自动落回当前人员；
     //        开闹钟开关前先校验人员；「悬浮窗」与厂商的「后台弹出界面」拆成两项，后者标为需手动确认
-        versionCode = 134
-        versionName = "1.0.34"
+    // 1.0.35 点「自启动」跳不过去时（一加/OPPO 把该页锁给系统「设置」）弹说明写清本机路径，
+    //        不再静默跳到应用详情；顺带补上 ColorOS / realme 的自启动组件
+        versionCode = 135
+        versionName = "1.0.35"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

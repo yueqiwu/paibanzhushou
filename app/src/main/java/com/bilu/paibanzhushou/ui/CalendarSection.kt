@@ -65,8 +65,12 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bilu.paibanzhushou.core.Dates
@@ -82,6 +86,13 @@ private val WEEK_NAMES = listOf("日", "一", "二", "三", "四", "五", "六")
 /**
  * 日历区块：标题 + 图例 + 月历卡片，1:1 移植 components/schedule-calendar.vue。
  */
+/**
+ * 首页实测出来的「每行日期高度」：由「日历区块顶部到页脚之间还剩多少高」倒推。
+ * 5.5 英寸这类矮屏上，按屏幕高减固定 chrome 估算会高估可用高度，末行/页脚被裁。
+ * 为 null 时退回 [calendarRowHeight] 的估算值。
+ */
+internal val LocalCalendarRowHeight = staticCompositionLocalOf<Dp?> { null }
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CalendarSection(
@@ -92,9 +103,26 @@ fun CalendarSection(
     /** 只把「月历卡」的位置回报给首页：整卡之外（标题/图例/月份栏）要留给左右滑动切人 */
     onGridBounds: ((Rect) -> Unit)? = null,
     /** 班次图例行的位置：这一行自己横向滚动，不能让首页的切人手势抢走 */
-    onLegendBounds: ((Rect) -> Unit)? = null
+    onLegendBounds: ((Rect) -> Unit)? = null,
+    /** 首页实测的可用高度（本区块顶部到页脚之间）：不传则退回按屏幕高估算 */
+    availableHeight: Dp? = null
 ) {
-    Column(Modifier.fillMaxWidth().padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(16))) {
+    val density = LocalDensity.current
+    // 本区块顶部与月历卡顶部在屏幕上的 y 坐标，两者之差就是标题/图例吃掉的高度
+    var sectionTopPx by remember { mutableStateOf<Float?>(null) }
+    var gridTopPx by remember { mutableStateOf<Float?>(null) }
+    val measuredRowHeight = if (availableHeight == null || sectionTopPx == null || gridTopPx == null) {
+        null
+    } else {
+        val above = with(density) { (gridTopPx!! - sectionTopPx!!).toDp() }
+        ((availableHeight - above - Rpx.dp(GRID_CHROME_RPX)) / 6f).coerceIn(Rpx.dp(30), Rpx.dp(66))
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { sectionTopPx = it.positionInRoot().y }
+            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(16))
+    ) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -142,15 +170,18 @@ fun CalendarSection(
         }
     }
 
-    GlassCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(10)),
-        radius = Rpx.dp(24),
-        bgAlpha = 0.66f,
-        contentPadding = PaddingValues(Rpx.dp(8))
-    ) {
-        CalendarGrid(state = state, person = person, interactive = interactive, onGridBounds = onGridBounds)
+    CompositionLocalProvider(LocalCalendarRowHeight provides measuredRowHeight) {
+        GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .onGloballyPositioned { gridTopPx = it.positionInRoot().y }
+                .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(10)),
+            radius = Rpx.dp(24),
+            bgAlpha = 0.66f,
+            contentPadding = PaddingValues(Rpx.dp(8))
+        ) {
+            CalendarGrid(state = state, person = person, interactive = interactive, onGridBounds = onGridBounds)
+        }
     }
 }
 
@@ -236,6 +267,8 @@ private fun LegendText(name: String) {
  */
 @Composable
 private fun calendarRowHeight(): Dp {
+    // 首页能实测出可用高度时优先用它
+    LocalCalendarRowHeight.current?.let { return it }
     val screenH = LocalConfiguration.current.screenHeightDp
     val chrome = CHROME_RPX * Rpx.scale + 24f
     val fit = (screenH - chrome) / 6f
@@ -244,6 +277,9 @@ private fun calendarRowHeight(): Dp {
 
 /** 日历以外的固定高度（rpx 口径，见 [calendarRowHeight]） */
 private const val CHROME_RPX = 737f
+
+/** 月历卡内部的固定部分：内边距 8×2 + 月份行 76 + 星期行 64 + 折叠箭头 34（rpx 口径） */
+private const val GRID_CHROME_RPX = 190f
 
 /** 虚拟无限 Pager：中间页 + 总页数（页索引保持在数千量级，避免超长偏移的精度问题） */
 private const val PAGER_MIDDLE = 6000
@@ -687,6 +723,16 @@ private fun CalendarCell(
     val boxHeight = rowHeight - Rpx.dp(8)
     val blockShape = RoundedCornerShape(Rpx.dp(12))
     val tagShape = RoundedCornerShape(Rpx.dp(8))
+    // 5.5 英寸屏一屏放 6 行时行高只有 40dp 左右，原来的字号+胶囊会互相压住，这里按行高整体收一档
+    val tight = boxHeight < 50.dp
+    val top = entry?.topInfo.orEmpty()
+    val info = entry?.info.orEmpty()
+    val dateSize = if (tight) 24f else 28f
+    val dateLine = if (tight) 26f else 32f
+    val tagSize = if (tight) 17f else 20f
+    val tagPadH = if (tight) 3f else 4f
+    val tagPadV = if (tight) 2f else 4f
+    val tagOffset = if (tight) 3f else 4f
 
     Box(modifier.clickable { onClick() }, contentAlignment = Alignment.Center) {
         Box(
@@ -696,12 +742,13 @@ private fun CalendarCell(
                 .background(if (selected) CAL_THEME else Color.Transparent, blockShape),
             contentAlignment = Alignment.Center
         ) {
-            // 日期数字（唯一参与流式布局的元素，垂直居中）
+            // 日期数字（唯一参与流式布局的元素，垂直居中；紧凑模式下往上挪半个胶囊，给底部班次腾位置）
             Text(
                 text = day.toString(),
-                fontSize = Rpx.sp(28),
-                lineHeight = Rpx.sp(32),
-                color = if (selected) Color.White else if (isToday) CAL_THEME else Color(0xFF333333)
+                fontSize = Rpx.sp(dateSize),
+                lineHeight = Rpx.sp(dateLine),
+                color = if (selected) Color.White else if (isToday) CAL_THEME else Color(0xFF333333),
+                modifier = Modifier.offset(y = if (tight && top.isEmpty()) -Rpx.dp(7) else 0.dp)
             )
             // 农历文字：绝对右 8rpx、垂直居中、宽度 16rpx、字号 24rpx、颜色 #333
             // 注意颜色：App.vue 里的 .mine-calendar-lunar-text 虽然写了 #f1f1f1，但组件内
@@ -712,46 +759,44 @@ private fun CalendarCell(
             Text(
                 // 源的 dayText()：isDay 时返回 todayText（i18n「今日」），否则才是节日/节气/农历
                 text = if (isToday) "今日" else lunarText,
-                fontSize = Rpx.sp(19.2),
-                lineHeight = Rpx.sp(20.8),
+                fontSize = Rpx.sp(if (tight) 17f else 19.2f),
+                lineHeight = Rpx.sp(if (tight) 18f else 20.8f),
                 color = if (selected) Color.White else Color(0xFF333333),
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .offset(x = -Rpx.dp(8))
+                    .offset(x = -Rpx.dp(6), y = if (tight && top.isEmpty()) -Rpx.dp(7) else 0.dp)
                     .width(Rpx.dp(16))
             )
-            val top = entry?.topInfo.orEmpty()
             if (top.isNotEmpty()) {
                 Box(
                     Modifier
                         .align(Alignment.TopCenter)
-                        .offset(y = Rpx.dp(4))
+                        .offset(y = Rpx.dp(tagOffset))
                         .background(if (selected) CAL_THEME else hexColor(entry?.topInfoColor), tagShape)
-                        .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(4)),
+                        .padding(horizontal = Rpx.dp(tagPadH), vertical = Rpx.dp(tagPadV)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = top,
-                        fontSize = Rpx.sp(20),
-                        lineHeight = Rpx.sp(20),
+                        fontSize = Rpx.sp(tagSize),
+                        lineHeight = Rpx.sp(tagSize),
                         color = Color.White
                     )
                 }
             }
-            val info = entry?.info.orEmpty()
             if (info.isNotEmpty()) {
                 Box(
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .offset(y = -Rpx.dp(4))
+                        .offset(y = -Rpx.dp(tagOffset))
                         .background(if (selected) CAL_THEME else hexColor(entry?.infoColor), tagShape)
-                        .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(4)),
+                        .padding(horizontal = Rpx.dp(tagPadH), vertical = Rpx.dp(tagPadV)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = info,
-                        fontSize = Rpx.sp(20),
-                        lineHeight = Rpx.sp(20),
+                        fontSize = Rpx.sp(tagSize),
+                        lineHeight = Rpx.sp(tagSize),
                         color = Color.White
                     )
                 }

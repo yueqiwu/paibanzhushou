@@ -20,6 +20,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -98,6 +99,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -136,6 +138,15 @@ fun IndexScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize().background(C.pageBg)) {
         val widthPx = with(density) { maxWidth.toPx() }
+        var headerHeight by remember { mutableStateOf(0.dp) }
+        var footerHeight by remember { mutableStateOf(0.dp) }
+        // 日历可用的净高度：整屏减状态栏、顶部 8rpx、头部卡、页脚、导航栏。
+        // 5.5 英寸（约 640dp 高）机器上按屏幕高减常量估算的 chrome 会偏小，行高压不进一屏，改为实测。
+        val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val availableForCalendar =
+            (maxHeight - statusTop - Rpx.dp(8) - headerHeight - footerHeight - navBottom)
+                .coerceAtLeast(0.dp)
         PageBackground()
 
         Column(
@@ -167,13 +178,14 @@ fun IndexScreen(
             Spacer(Modifier.height(Rpx.dp(8)))
 
             Column(Modifier.fillMaxWidth()) {
-                HeroCard(state, onOpenAlarmSettings)
-                ConfigCard(
+                HeaderCard(
                     state = state,
                     swipe = swipe,
                     widthPx = widthPx,
+                    onOpenAlarmSettings = onOpenAlarmSettings,
                     onTabsBounds = { tabsBounds = it },
-                    onConfettiOrigin = { confettiOrigin = it }
+                    onConfettiOrigin = { confettiOrigin = it },
+                    onHeight = { headerHeight = it }
                 )
             }
             SwipeableCalendar(
@@ -183,9 +195,15 @@ fun IndexScreen(
                 widthPx = widthPx,
                 onOpenMemberTable = onOpenMemberTable,
                 onGridBounds = { calendarBounds = it },
-                onLegendBounds = { legendBounds = it }
+                onLegendBounds = { legendBounds = it },
+                availableHeight = availableForCalendar
             )
-            CopyrightFooter(state)
+            CopyrightFooter(
+                state = state,
+                modifier = Modifier.onGloballyPositioned {
+                    footerHeight = with(density) { it.size.height.toDp() }
+                }
+            )
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
 
@@ -212,7 +230,8 @@ private fun SwipeableCalendar(
     widthPx: Float,
     onOpenMemberTable: () -> Unit,
     onGridBounds: (Rect) -> Unit,
-    onLegendBounds: (Rect) -> Unit
+    onLegendBounds: (Rect) -> Unit,
+    availableHeight: Dp? = null
 ) {
     Box(
         Modifier
@@ -237,7 +256,8 @@ private fun SwipeableCalendar(
                     // 只有月历卡本身吃掉横滑（翻月）；标题、月份栏交给外层切人，
                     // 图例自己横向滚动（班次一多就溢出）
                     onGridBounds = onGridBounds,
-                    onLegendBounds = onLegendBounds
+                    onLegendBounds = onLegendBounds,
+                    availableHeight = availableHeight
                 )
             }
         }
@@ -253,7 +273,8 @@ private fun SwipeableCalendar(
                         state = state,
                         onOpenMemberTable = {},
                         person = peek,
-                        interactive = false
+                        interactive = false,
+                        availableHeight = availableHeight
                     )
                 }
             }
@@ -324,15 +345,31 @@ private fun renderBackdropBitmap(w: Int, h: Int, density: Density): ImageBitmap 
 
 /* ---------------- 顶部标题卡 ---------------- */
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HeroCard(state: IndexState, onOpenAlarmSettings: () -> Unit) {
+private fun HeaderCard(
+    state: IndexState,
+    swipe: PersonSwipeState,
+    widthPx: Float,
+    onOpenAlarmSettings: () -> Unit,
+    onTabsBounds: (Rect) -> Unit,
+    onConfettiOrigin: (Offset) -> Unit,
+    onHeight: (Dp) -> Unit
+) {
+    val density = LocalDensity.current
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
+            .onGloballyPositioned { onHeight(with(density) { it.size.height.toDp() }) }
             .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(16)),
         radius = Rpx.dp(24),
         bgAlpha = 0.62f,
-        contentPadding = PaddingValues(horizontal = Rpx.dp(24), vertical = Rpx.dp(14))
+        contentPadding = PaddingValues(
+            start = Rpx.dp(22),
+            end = Rpx.dp(22),
+            top = Rpx.dp(14),
+            bottom = Rpx.dp(10)
+        )
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -372,6 +409,59 @@ private fun HeroCard(state: IndexState, onOpenAlarmSettings: () -> Unit) {
             )
         }
         AlarmTopButton(state = state, onClick = onOpenAlarmSettings)
+        }
+        // 排班设置：标题行可点，展开后才是班次/周期/自动休息/闹钟配置
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = Rpx.dp(6))
+                .clickable { state.toggleConfig() },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "排班设置",
+                fontSize = Rpx.sp(30),
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF111111)
+            )
+            if (state.people.size > 1) {
+                Text(
+                    text = "长按人员名称可拖拽排序",
+                    fontSize = Rpx.sp(20),
+                    color = C.hint,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = Rpx.dp(16), end = Rpx.dp(16))
+                )
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+            Box(
+                Modifier
+                    .background(Color(0x144A90E2), RoundedCornerShape(999.dp))
+                    .border(Rpx.dp(1), Color(0x334A90E2), RoundedCornerShape(999.dp))
+                    .clickable { state.toggleConfig() }
+                    .padding(horizontal = Rpx.dp(16), vertical = Rpx.dp(6))
+            ) {
+                Text(
+                    text = if (state.configOpen) "收起 ▲" else "展开 ▼",
+                    fontSize = Rpx.sp(22),
+                    color = C.blue
+                )
+            }
+        }
+        // 人员标签行（整页切人的手势在这里让位给横向滚动）
+        PeopleTabs(state, swipe, widthPx, onTabsBounds)
+        androidx.compose.animation.AnimatedVisibility(
+            visible = state.configOpen,
+            enter = expandVertically(tween(280)) + fadeIn(tween(280)),
+            exit = shrinkVertically(tween(280)) + fadeOut(tween(200))
+        ) {
+            Column(Modifier.fillMaxWidth()) {
+                ConfigBody(state, onConfettiOrigin)
+            }
         }
     }
 }
@@ -455,79 +545,6 @@ private fun AlarmTopButton(state: IndexState, onClick: () -> Unit) {
                     .background(Color(0xFFE53935), CircleShape)
                     .border(Rpx.dp(2), Color.White, CircleShape)
             )
-        }
-    }
-}
-
-/* ---------------- 排班设置卡片 ---------------- */
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ConfigCard(
-    state: IndexState,
-    swipe: PersonSwipeState,
-    widthPx: Float,
-    onTabsBounds: (Rect) -> Unit,
-    onConfettiOrigin: (Offset) -> Unit
-) {
-    GlassCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(12)),
-        radius = Rpx.dp(24),
-        bgAlpha = 0.62f,
-        contentPadding = PaddingValues(
-            start = Rpx.dp(22),
-            end = Rpx.dp(22),
-            top = Rpx.dp(16),
-            bottom = Rpx.dp(14)
-        )
-    ) {
-        // header
-        Row(
-            Modifier.fillMaxWidth().clickable { state.toggleConfig() },
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("排班设置", fontSize = Rpx.sp(30), fontWeight = FontWeight.SemiBold, color = Color(0xFF111111))
-            if (state.people.size > 1) {
-                Text(
-                    text = "长按人员名称可拖拽排序",
-                    fontSize = Rpx.sp(20),
-                    color = C.hint,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = Rpx.dp(16), end = Rpx.dp(16))
-                )
-            } else {
-                Spacer(Modifier.weight(1f))
-            }
-            Box(
-                Modifier
-                    .background(Color(0x144A90E2), RoundedCornerShape(999.dp))
-                    .border(Rpx.dp(1), Color(0x334A90E2), RoundedCornerShape(999.dp))
-                    .clickable { state.toggleConfig() }
-                    .padding(horizontal = Rpx.dp(16), vertical = Rpx.dp(6))
-            ) {
-                Text(
-                    text = if (state.configOpen) "收起 ▲" else "展开 ▼",
-                    fontSize = Rpx.sp(22),
-                    color = C.blue
-                )
-            }
-        }
-
-        PeopleTabs(state, swipe, widthPx, onTabsBounds)
-
-        androidx.compose.animation.AnimatedVisibility(
-            visible = state.configOpen,
-            enter = expandVertically(tween(280)) + fadeIn(tween(280)),
-            exit = shrinkVertically(tween(280)) + fadeOut(tween(200))
-        ) {
-            Column(Modifier.fillMaxWidth()) {
-                ConfigBody(state, onConfettiOrigin)
-            }
         }
     }
 }
@@ -992,13 +1009,13 @@ private fun RestSettingRow(
 /* ---------------- 版权 ---------------- */
 
 @Composable
-private fun CopyrightFooter(state: IndexState) {
+private fun CopyrightFooter(state: IndexState, modifier: Modifier = Modifier) {
     // 导入过旧版数据时留了个撤销口：误点导入还能把导入前的数据恢复回来
     var backupAvailable by remember { mutableStateOf(Migrate.hasBackup()) }
     var confirmRestore by remember { mutableStateOf(false) }
     // 版权与版本合成一行，省掉原先三行文字占的高度（开屏要看完整月历）
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
             .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(10), bottom = Rpx.dp(8))
     ) {
