@@ -9,7 +9,7 @@ Kotlin + Jetpack Compose 实现，无第三方运行时依赖——持久化用 
 JSON 用 org.json，农历/节气/节假日全部本地算。
 
 - 包名 / applicationId：`com.bilu.paibanzhushou`
-- 当前发布版本：**versionName 1.0.33，versionCode 133**
+- 当前发布版本：**versionName 1.0.34，versionCode 134**
 - minSdk 24（Android 7.0），targetSdk 37，Compose Material3
 
 ## 功能
@@ -32,12 +32,12 @@ JSON 用 org.json，农历/节气/节假日全部本地算。
 
 | | |
 | --- | --- |
-| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.33.apk>（8,790,391 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.33/banbiaoxiaoli-1.0.33.apk> |
+| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.34.apk>（8,790,391 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.34/banbiaoxiaoli-1.0.34.apk> |
 | 官网（自有域名） | <https://qipaclub.top/paibanzhushou/> |
 | 官网（GitHub Pages） | <https://yueqiwu.github.io/paibanzhushou/> |
 | 源码 | <https://github.com/yueqiwu/paibanzhushou> |
-| 版本 / Release | v1.0.33（versionCode 133，正式签名） |
-| 包校验 | SHA-256 `F8123D9BA275D79BFCCAFC616E1DC5A2F885734142C153BA04A382200130844C` |
+| 版本 / Release | v1.0.34（versionCode 134，正式签名） |
+| 包校验 | SHA-256 `9450F61050776EE9F7035A278203360748DA4D55AC45018DF64E8B0BA6BFA309` |
 
 官网源码就是本仓库的 `docs/` 目录（纯静态 `index.html` + `style.css` + `img/`，全部相对路径），
 可直接整目录拷到任意静态站点的子路径下，例如 `qipaclub.top/paibanzhushou/`。

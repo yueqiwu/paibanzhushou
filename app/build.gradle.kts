@@ -55,8 +55,10 @@ android {
     // 1.0.32 新增匿名使用统计上报（每天首次打开上报一次随机安装标识 + 日期 + 版本号），只在后台网页看，App 内无任何入口
     // 1.0.33 从旧版（uni-app）接收迁移数据：深链 + 剪贴板两条入口；导入前留快照可撤销；
     //        引导只在原生版还没数据时出现，点「稍后」不再每次冷启动重弹
-        versionCode = 133
-        versionName = "1.0.33"
+    // 1.0.34 导入旧版数据后闹钟页「为谁写闹钟」会一个都不高亮：绑定人员失效时自动落回当前人员；
+    //        开闹钟开关前先校验人员；「悬浮窗」与厂商的「后台弹出界面」拆成两项，后者标为需手动确认
+        versionCode = 134
+        versionName = "1.0.34"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
