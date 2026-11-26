@@ -61,8 +61,10 @@ android {
     //        不再静默跳到应用详情；顺带补上 ColorOS / realme 的自启动组件
     // 1.0.36 修 1.0.35 在正常分辨率上日历只占半屏、下方大片空白：行高上下限误写成 rpx（上限只有 32dp），
     //        改为真实 dp（30–110dp），正常机行高回到约 60dp，5.5 英寸仍一屏
-        versionCode = 136
-        versionName = "1.0.36"
+    // 1.0.37 闹钟权限新增「锁屏显示」一项（ColorOS 把它放在隐私 → 全部权限里），
+    //        跳不过去时弹说明写清本机路径；顺带把「全屏通知」的说明和它区分开
+        versionCode = 137
+        versionName = "1.0.37"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

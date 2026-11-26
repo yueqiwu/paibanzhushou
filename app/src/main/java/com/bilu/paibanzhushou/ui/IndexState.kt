@@ -103,6 +103,7 @@ class IndexState(
         const val PERM_OVERLAY = "overlay"
         const val PERM_BG_POPUP = "bgpopup"
         const val PERM_FSI = "fsi"
+        const val PERM_LOCKSCREEN = "lockscreen"
         const val PERM_BATTERY = "battery"
         const val PERM_AUTOSTART = "autostart"
 
@@ -1066,8 +1067,17 @@ class IndexState(
                 AlarmPermission(
                     id = PERM_FSI,
                     title = "全屏通知",
-                    desc = "锁屏时自动亮屏显示响铃页（部分机型叫「锁屏显示」）",
+                    desc = "锁屏时自动亮屏显示响铃页（Android 14 起叫「全屏通知」，和下面的「锁屏显示」是两项）",
                     ok = AlarmNotifications.canUseFullScreen(context)
+                ),
+                AlarmPermission(
+                    id = PERM_LOCKSCREEN,
+                    title = "锁屏显示",
+                    desc = "锁屏上允许显示本应用的提醒内容。ColorOS / realme 叫「锁屏显示」，" +
+                        "其他机型在「锁屏通知」里。关掉后闹钟照响，但锁屏上看不到响铃页" +
+                        "（此项无法自动检测，请手动确认已允许）",
+                    ok = false,
+                    hintOnly = true
                 ),
                 AlarmPermission(
                     id = PERM_BATTERY,
@@ -1128,6 +1138,9 @@ class IndexState(
             // 国产 ROM 的「自启动 / 后台运行」没有统一入口，逐个试各家的设置页
             // 「后台弹出界面」是厂商私有开关，没有可直达的页面，只落到应用详情让用户自己找
             PERM_BG_POPUP -> listOf(app)
+            // 「锁屏显示」是厂商私有权限（ColorOS 在「隐私与安全 → 隐私 → 全部权限」里），
+            // 没有公共入口，各家页面挨个试，都打不开就弹说明
+            PERM_LOCKSCREEN -> lockscreenIntents()
             PERM_AUTOSTART -> autostartIntents()
             else -> listOf(app)
         }
@@ -1139,6 +1152,10 @@ class IndexState(
         // 改成弹说明写清本机怎么走
         if (id == PERM_AUTOSTART) {
             permGuide = autostartGuide()
+            return
+        }
+        if (id == PERM_LOCKSCREEN) {
+            permGuide = lockscreenGuide()
             return
         }
         runCatching { context.startActivity(app.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -1177,6 +1194,43 @@ class IndexState(
             "同一页的「关联启动」（有的机型叫「允许后台活动」）也建议一起打开，" +
             "否则划掉后台之后闹钟可能不响。"
     )
+
+    /** 这台机器上「锁屏显示 / 锁屏通知」在哪（跳不过去时写进说明弹窗） */
+    private fun lockscreenPath(): String {
+        val brand = (Build.MANUFACTURER + " " + Build.BRAND).lowercase(java.util.Locale.ROOT)
+        return when {
+            brand.contains("oneplus") || brand.contains("oppo") || brand.contains("realme") ||
+                brand.contains("oplus") -> "设置 → 隐私与安全 → 隐私 → 全部权限 → 权限 → 锁屏显示"
+            brand.contains("honor") || brand.contains("huawei") -> "设置 → 通知和状态栏 → 锁屏通知"
+            brand.contains("xiaomi") || brand.contains("redmi") -> "设置 → 通知与控制中心 → 锁屏通知"
+            brand.contains("vivo") || brand.contains("iqoo") -> "设置 → 通知与状态栏 → 锁屏通知"
+            brand.contains("meizu") -> "设置 → 通知和状态栏 → 锁屏通知"
+            else -> "设置 → 通知 → 锁屏通知（部分机型叫「锁屏显示」）"
+        }
+    }
+
+    private fun lockscreenGuide(): PermGuide = PermGuide(
+        title = "需要手动打开「锁屏显示」",
+        content = "这台手机不允许其他 App 直接跳到「锁屏显示」这一页，只能你自己走一步：\n\n" +
+            lockscreenPath() + " → 找到「班表小历」→ 允许。\n\n" +
+            "不开也能照常响铃，只是锁屏时不会亮屏弹出响铃页。"
+    )
+
+    /** 「锁屏显示」可能的私有设置页（打不开就抛异常，由外层 runCatching 兜住） */
+    private fun lockscreenIntents(): List<Intent> {
+        val vendors = listOf(
+            // ColorOS / realme UI / 一加：权限总表里的「锁屏显示」
+            "com.oplus.safecenter" to "com.oplus.safecenter.permission.PermissionManagerActivity",
+            "com.coloros.safecenter" to "com.coloros.safecenter.permission.PermissionManagerActivity",
+            "com.oppo.safe" to "com.oppo.safe.permission.PermissionAppListActivity"
+        )
+        return vendors.map { (p, c) ->
+            Intent().apply {
+                component = ComponentName(p, c)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+    }
 
     /** 各家 ROM 的「自启动 / 后台运行」管理页（打不开就抛异常，由外层 runCatching 兜住） */
     private fun autostartIntents(): List<Intent> {
