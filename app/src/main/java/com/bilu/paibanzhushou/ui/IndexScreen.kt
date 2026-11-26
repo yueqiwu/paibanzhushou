@@ -1048,39 +1048,18 @@ private fun CopyrightFooter(
     }
     // 版权与版本合成一行，省掉原先三行文字占的高度（开屏要看完整月历）
     Column(
-        modifier
+        Modifier
             .fillMaxWidth()
-            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(10), bottom = Rpx.dp(8))
+            .padding(start = Rpx.dp(24), end = Rpx.dp(24), top = Rpx.dp(10))
     ) {
+        // 更新卡片不参与「页脚实测高度」：它出现时只是页面变长、往下滚就能看到，
+        // 不会再把日历的可用高度算小、把月历压窄。
         UpdateSection(state)
-        Row(
-            Modifier
+        Column(
+            modifier
                 .fillMaxWidth()
-                .padding(top = Rpx.dp(6)),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(top = Rpx.dp(14), bottom = Rpx.dp(8))
         ) {
-            Text(
-                text = "仅供个人使用 · © 2026 WYQ",
-                fontSize = Rpx.sp(19),
-                color = Color(0x590B1020),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            Text(
-                text = "v" + state.currentVersion() + " · " + if (state.updateChecking) "检查中…" else "检查更新",
-                fontSize = Rpx.sp(19),
-                color = Color(0xCC4A90E2),
-                maxLines = 1,
-                modifier = Modifier
-                    .padding(start = Rpx.dp(12))
-                    .clip(RoundedCornerShape(Rpx.dp(8)))
-                    .clickable { state.checkUpdate(silent = false) }
-                    .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
-            )
-        }
-        if (showRestoreHint) {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -1089,44 +1068,73 @@ private fun CopyrightFooter(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "误导入？恢复导入前的数据",
+                    text = "仅供个人使用 · © 2026 WYQ",
                     fontSize = Rpx.sp(19),
-                    color = Color(0xCCE5534B),
+                    color = Color(0x590B1020),
                     maxLines = 1,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(Rpx.dp(8)))
-                        .clickable { confirmRestore = true }
-                        .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 Text(
-                    text = "关闭",
+                    text = "v" + state.currentVersion() + " · " + if (state.updateChecking) "检查中…" else "检查更新",
                     fontSize = Rpx.sp(19),
-                    color = Color(0x660B1020),
+                    color = Color(0xCC4A90E2),
                     maxLines = 1,
                     modifier = Modifier
                         .padding(start = Rpx.dp(12))
                         .clip(RoundedCornerShape(Rpx.dp(8)))
-                        .clickable {
-                            Migrate.dismissRestoreHint()
-                            showRestoreHint = false
-                        }
+                        .clickable { state.checkUpdate(silent = false) }
                         .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
                 )
             }
-        }
-        // 迁移入口常驻在页脚一次，首启引导被关掉之后也找得回来
-        if (!Migrate.alreadyMigrated()) {
-            Text(
-                text = "从旧版导入数据",
-                fontSize = Rpx.sp(19),
-                color = Color(0xCC4A90E2),
-                maxLines = 1,
-                modifier = Modifier
-                    .padding(top = Rpx.dp(6))
-                    .clip(RoundedCornerShape(Rpx.dp(8)))
-                    .clickable { onImportLegacy() }
-                    .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
-            )
+            if (showRestoreHint) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = Rpx.dp(6)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "误导入？恢复导入前的数据",
+                        fontSize = Rpx.sp(19),
+                        color = Color(0xCCE5534B),
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(Rpx.dp(8)))
+                            .clickable { confirmRestore = true }
+                            .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
+                    )
+                    Text(
+                        text = "关闭",
+                        fontSize = Rpx.sp(19),
+                        color = Color(0x660B1020),
+                        maxLines = 1,
+                        modifier = Modifier
+                            .padding(start = Rpx.dp(12))
+                            .clip(RoundedCornerShape(Rpx.dp(8)))
+                            .clickable {
+                                Migrate.dismissRestoreHint()
+                                showRestoreHint = false
+                            }
+                            .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
+                    )
+                }
+            }
+            // 迁移入口常驻在页脚一次，首启引导被关掉之后也找得回来
+            if (!Migrate.alreadyMigrated()) {
+                Text(
+                    text = "从旧版导入数据",
+                    fontSize = Rpx.sp(19),
+                    color = Color(0xCC4A90E2),
+                    maxLines = 1,
+                    modifier = Modifier
+                        .padding(top = Rpx.dp(6))
+                        .clip(RoundedCornerShape(Rpx.dp(8)))
+                        .clickable { onImportLegacy() }
+                        .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
+                )
+            }
         }
     }
 
@@ -1198,12 +1206,14 @@ private fun UpdateSection(state: IndexState) {
                 )
                 val notes = remember(info.notes) { plainNotes(info.notes) }
                 if (notes.isNotBlank()) {
-                    // 更新内容要能看到全部：整张卡片随内容长高，外层页面本来就能上下滚
+                    // 更新说明只留前几行，够看懂改了什么即可（完整的在 GitHub Release 里）
                     Text(
                         text = notes,
                         fontSize = Rpx.sp(20),
                         lineHeight = Rpx.sp(32),
                         color = C.textSub,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = Rpx.dp(6))
                     )
                 }
@@ -1264,7 +1274,6 @@ private fun UpdateSection(state: IndexState) {
                 }
             }
         }
-        Spacer(Modifier.height(Rpx.dp(14)))
     }
 }
 

@@ -65,8 +65,10 @@ android {
     //        跳不过去时弹说明写清本机路径；顺带把「全屏通知」的说明和它区分开
     // 1.0.38 「误导入？恢复导入前的数据」不再常驻：只在刚导入 24 小时内提示一次，可点「关闭」收起；
     //        「从剪贴板导入旧版数据」改成常驻入口（排班设置展开区底部 + 页脚），首启引导关掉后也找得回
-        versionCode = 138
-        versionName = "1.0.38"
+    // 1.0.39 版本更新卡片不再参与页脚高度实测：它出现时只是页面变长可下滚，不再把日历压窄；
+    //        更新说明只显示前 4 行，写太长的细节留在 GitHub Release 里
+        versionCode = 139
+        versionName = "1.0.39"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
