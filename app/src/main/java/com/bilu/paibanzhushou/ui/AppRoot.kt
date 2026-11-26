@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.bilu.paibanzhushou.data.Migrate
 import kotlinx.coroutines.delay
 
 /** uni.showToast 的替代：居中深色小提示，1.5s 自动消失 */
@@ -72,7 +75,30 @@ fun AppRoot() {
     val indexState = remember { IndexState(context.applicationContext, scope, toastHost::show) }
     var route by remember { mutableStateOf("index") }
 
-    LaunchedEffect(Unit) { indexState.init() }
+    // 旧版迁移：深链带来的数据包（等用户确认后写入）
+    var migratePayload by remember { mutableStateOf<Migrate.Payload?>(null) }
+    // 首启引导：还装着旧版、又还没迁移过时提示一次
+    var showMigrateGuide by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        indexState.init()
+        if (Migrate.pendingLink == null && Migrate.legacyInstalled(context) && !Migrate.alreadyMigrated()) {
+            showMigrateGuide = true
+        }
+    }
+
+    // 深链可能在应用已启动时才到（singleTask + onNewIntent），状态一变就弹确认框
+    val pendingMigrateLink = Migrate.pendingLink
+    LaunchedEffect(pendingMigrateLink) {
+        val link = Migrate.consumeLink() ?: return@LaunchedEffect
+        val payload = Migrate.parseLink(link)
+        if (payload == null) {
+            toastHost.show("迁移链接无法识别")
+        } else {
+            showMigrateGuide = false
+            migratePayload = payload
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -181,6 +207,74 @@ fun AppRoot() {
                         textAlign = TextAlign.Center
                     )
                 }
+            }
+
+            // 旧版迁移确认：深链 / 剪贴板解析成功后都走这里
+            val payload = migratePayload
+            if (payload != null) {
+                AlertDialog(
+                    onDismissRequest = { migratePayload = null },
+                    title = { Text("导入旧版数据") },
+                    text = {
+                        Text(
+                            "检测到 " + Migrate.describe(payload) +
+                                "。导入会覆盖当前数据，旧版里的内容不会被删除。",
+                            fontSize = Rpx.sp(26)
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                val result = Migrate.apply(payload)
+                                migratePayload = null
+                                indexState.reloadAfterMigrate()
+                                toastHost.show(result.message)
+                            }
+                        ) {
+                            Text("导入")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { migratePayload = null }) {
+                            Text("取消")
+                        }
+                    }
+                )
+            }
+
+            // 首启引导：从系统安装器直接打开新版（没带深链）时，告诉用户回旧版点迁移
+            if (showMigrateGuide) {
+                AlertDialog(
+                    onDismissRequest = { showMigrateGuide = false },
+                    title = { Text("把旧版数据带过来") },
+                    text = {
+                        Text(
+                            "检测到还装着旧版排班助手。打开旧版，连点最下面版权信息 7 下，" +
+                                "选「打开原生版并导入」；也可以先在旧版里复制迁移数据，再点下面的按钮。",
+                            fontSize = Rpx.sp(26)
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                val fromClipboard = Migrate.parseClipboard(context)
+                                if (fromClipboard == null) {
+                                    toastHost.show("剪贴板里没有迁移数据")
+                                } else {
+                                    showMigrateGuide = false
+                                    migratePayload = fromClipboard
+                                }
+                            }
+                        ) {
+                            Text("从剪贴板导入")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showMigrateGuide = false }) {
+                            Text("稍后")
+                        }
+                    }
+                )
             }
         }
     }

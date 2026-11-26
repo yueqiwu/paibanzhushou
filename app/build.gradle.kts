@@ -53,8 +53,8 @@ android {
     // 1.0.30 2×1 卡片改成「所有人员今天的班次」一人一列；切人时等主层换完再归位（荣耀上标签闪一下）
     // 1.0.31 班次图例可左右滑动（班次多时不再被裁掉），图例区不再触发整页切人
     // 1.0.32 新增匿名使用统计上报（每天首次打开上报一次随机安装标识 + 日期 + 版本号），只在后台网页看，App 内无任何入口
-        versionCode = 132
-        versionName = "1.0.32"
+        versionCode = 133
+        versionName = "1.0.33"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

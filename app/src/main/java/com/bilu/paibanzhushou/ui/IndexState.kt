@@ -326,6 +326,20 @@ class IndexState(
         }
     }
 
+    /**
+     * 从旧版迁移导入之后整体重载。
+     * 存储被直接改写过，界面上的人员、班次、节假日全是导入前的对象，必须重新读一遍；
+     * 桌面小组件和闹钟也跟着当前人员重算，否则会出现「首页是新数据、卡片还是旧的」。
+     */
+    fun reloadAfterMigrate() {
+        loadBanOptions()
+        loadPeople()
+        loadHolidayAndBanList()
+        generateSchedule()
+        ScheduleWidgetProvider.refresh(context)
+        if (alarmConfig.enabled) resyncAlarms()
+    }
+
     fun getActivePerson(): Person? = people.firstOrNull { it.id == activePersonId } ?: people.firstOrNull()
 
     private fun defaultPerson(name: String, anchor: String, cycle: List<String>): Person {
