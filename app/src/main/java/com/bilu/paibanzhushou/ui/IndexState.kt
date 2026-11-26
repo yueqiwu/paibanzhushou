@@ -334,6 +334,13 @@ class IndexState(
     fun reloadAfterMigrate() {
         loadBanOptions()
         loadPeople()
+        // 闹钟绑的是旧版的人员 id，新集里没有就落到当前人员，
+        // 免得闹钟页「为谁写闹钟」一个都不高亮（响铃本身有兜底，不影响）
+        val boundAlarmPerson = alarmConfig.personId
+        if (boundAlarmPerson != null && people.none { it.id == boundAlarmPerson }) {
+            alarmConfig = alarmConfig.copy(personId = activePersonId.ifEmpty { null })
+            AlarmStore.save(alarmConfig)
+        }
         loadHolidayAndBanList()
         generateSchedule()
         ScheduleWidgetProvider.refresh(context)

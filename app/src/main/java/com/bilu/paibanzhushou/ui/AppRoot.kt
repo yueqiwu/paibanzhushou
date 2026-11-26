@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,13 +77,20 @@ fun AppRoot() {
     var route by remember { mutableStateOf("index") }
 
     // 旧版迁移：深链带来的数据包（等用户确认后写入）
-    var migratePayload by remember { mutableStateOf<Migrate.Payload?>(null) }
-    // 首启引导：还装着旧版、又还没迁移过时提示一次
-    var showMigrateGuide by remember { mutableStateOf(false) }
+    // 存成 JSON 字符串：转屏/进程重建后待确认的包还在，深链早已被消费也不会丢
+    var migratePayloadJson by rememberSaveable { mutableStateOf<String?>(null) }
+    val migratePayload = Migrate.decodePayload(migratePayloadJson)
+    // 首启引导：还装着旧版 + 原生版还是白纸 + 没迁移过 + 没点过「稍后」才提示
+    var showMigrateGuide by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         indexState.init()
-        if (Migrate.pendingLink == null && Migrate.legacyInstalled(context) && !Migrate.alreadyMigrated()) {
+        if (Migrate.pendingLink == null &&
+            Migrate.legacyInstalled(context) &&
+            Migrate.nativeDataIsEmpty() &&
+            !Migrate.alreadyMigrated() &&
+            !Migrate.guideDismissed()
+        ) {
             showMigrateGuide = true
         }
     }
@@ -96,7 +104,7 @@ fun AppRoot() {
             toastHost.show("迁移链接无法识别")
         } else {
             showMigrateGuide = false
-            migratePayload = payload
+            migratePayloadJson = Migrate.encodePayload(payload)
         }
     }
 
@@ -213,7 +221,7 @@ fun AppRoot() {
             val payload = migratePayload
             if (payload != null) {
                 AlertDialog(
-                    onDismissRequest = { migratePayload = null },
+                    onDismissRequest = { migratePayloadJson = null },
                     title = { Text("导入旧版数据") },
                     text = {
                         Text(
@@ -226,7 +234,7 @@ fun AppRoot() {
                         TextButton(
                             onClick = {
                                 val result = Migrate.apply(payload)
-                                migratePayload = null
+                                migratePayloadJson = null
                                 indexState.reloadAfterMigrate()
                                 toastHost.show(result.message)
                             }
@@ -235,7 +243,7 @@ fun AppRoot() {
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { migratePayload = null }) {
+                        TextButton(onClick = { migratePayloadJson = null }) {
                             Text("取消")
                         }
                     }
@@ -245,7 +253,10 @@ fun AppRoot() {
             // 首启引导：从系统安装器直接打开新版（没带深链）时，告诉用户回旧版点迁移
             if (showMigrateGuide) {
                 AlertDialog(
-                    onDismissRequest = { showMigrateGuide = false },
+                    onDismissRequest = {
+                        Migrate.dismissGuide()
+                        showMigrateGuide = false
+                    },
                     title = { Text("把旧版数据带过来") },
                     text = {
                         Text(
@@ -262,7 +273,7 @@ fun AppRoot() {
                                     toastHost.show("剪贴板里没有迁移数据")
                                 } else {
                                     showMigrateGuide = false
-                                    migratePayload = fromClipboard
+                                    migratePayloadJson = Migrate.encodePayload(fromClipboard)
                                 }
                             }
                         ) {
@@ -270,7 +281,12 @@ fun AppRoot() {
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showMigrateGuide = false }) {
+                        TextButton(
+                            onClick = {
+                                Migrate.dismissGuide()
+                                showMigrateGuide = false
+                            }
+                        ) {
                             Text("稍后")
                         }
                     }

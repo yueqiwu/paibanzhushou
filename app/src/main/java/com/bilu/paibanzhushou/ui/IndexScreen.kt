@@ -51,9 +51,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -104,6 +106,7 @@ import androidx.core.content.ContextCompat
 import com.bilu.paibanzhushou.R
 import com.bilu.paibanzhushou.core.Dates
 import com.bilu.paibanzhushou.core.Schedule
+import com.bilu.paibanzhushou.data.Migrate
 import com.bilu.paibanzhushou.data.Person
 import android.Manifest
 import kotlin.math.roundToInt
@@ -990,6 +993,9 @@ private fun RestSettingRow(
 
 @Composable
 private fun CopyrightFooter(state: IndexState) {
+    // 导入过旧版数据时留了个撤销口：误点导入还能把导入前的数据恢复回来
+    var backupAvailable by remember { mutableStateOf(Migrate.hasBackup()) }
+    var confirmRestore by remember { mutableStateOf(false) }
     // 版权与版本合成一行，省掉原先三行文字占的高度（开屏要看完整月历）
     Column(
         Modifier
@@ -1024,6 +1030,41 @@ private fun CopyrightFooter(state: IndexState) {
                     .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
             )
         }
+        if (backupAvailable) {
+            Text(
+                text = "误导入？恢复导入前的数据",
+                fontSize = Rpx.sp(19),
+                color = Color(0xCCE5534B),
+                maxLines = 1,
+                modifier = Modifier
+                    .padding(top = Rpx.dp(6))
+                    .clip(RoundedCornerShape(Rpx.dp(8)))
+                    .clickable { confirmRestore = true }
+                    .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
+            )
+        }
+    }
+
+    if (confirmRestore) {
+        AlertDialog(
+            onDismissRequest = { confirmRestore = false },
+            title = { Text("恢复导入前的数据") },
+            text = { Text("把排班恢复成上次导入旧版数据之前的模样，导入进来的内容会被替换掉。只保留最近一次的撤销点。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmRestore = false
+                        val result = Migrate.restoreBackup()
+                        backupAvailable = Migrate.hasBackup()
+                        if (result.ok) state.reloadAfterMigrate()
+                        state.toastMsg(result.message)
+                    }
+                ) { Text("恢复") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRestore = false }) { Text("取消") }
+            }
+        )
     }
 }
 

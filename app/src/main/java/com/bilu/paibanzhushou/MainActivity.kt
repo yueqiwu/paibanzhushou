@@ -41,5 +41,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         Migrate.offerLink(Migrate.linkFromUri(intent.data))
+        // 后台被唤起时当天可能还没报过（每天只报一次，重复调用无副作用）
+        UsageStats.ping(this)
     }
 }
