@@ -200,10 +200,11 @@ object AlarmNotifications {
     }
 
     /**
-     * 是否有「后台弹出界面」权限（SYSTEM_ALERT_WINDOW）。
+     * 是否有「悬浮窗」权限（SYSTEM_ALERT_WINDOW / 显示在其他应用上层）。
      *
      * 有它才会被 Android 视为「可以后台启动 Activity」的例外，锁屏/后台时才能真正弹出响铃页；
      * 没有的话 startActivity 会被系统以 BAL_BLOCK 拒掉（铃声仍由前台服务播放，不受影响）。
+     * 注意：国产 ROM 另有独立的「后台弹出界面」私有开关，无法通过 API 检测，见 ui/IndexState.kt。
      */
     fun canDrawOverlays(context: Context): Boolean =
         runCatching { Settings.canDrawOverlays(context) }.getOrDefault(false)

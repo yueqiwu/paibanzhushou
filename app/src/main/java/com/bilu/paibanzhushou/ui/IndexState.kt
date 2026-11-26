@@ -94,6 +94,7 @@ class IndexState(
         const val PERM_NOTIF = "notif"
         const val PERM_EXACT = "exact"
         const val PERM_OVERLAY = "overlay"
+        const val PERM_BG_POPUP = "bgpopup"
         const val PERM_FSI = "fsi"
         const val PERM_BATTERY = "battery"
         const val PERM_AUTOSTART = "autostart"
@@ -318,12 +319,23 @@ class IndexState(
         val match = people.firstOrNull { it.id == savedActiveId }
         activePersonId = match?.id ?: people.firstOrNull()?.id ?: ""
         applyActivePersonToForm()
-        // 老数据（1.0.22 之前）没有「闹钟作用于哪个人员」，补一次成当前人员；
-        // 之后闹钟页再怎么选人都和首页当前人员各管各的。
-        if (alarmConfig.personId == null && activePersonId.isNotEmpty()) {
-            alarmConfig = alarmConfig.copy(personId = activePersonId)
-            AlarmStore.save(alarmConfig)
-        }
+        ensureAlarmPerson()
+    }
+
+    /**
+     * 让闹钟绑定的人员一定存在。
+     * 老数据（1.0.22 之前）没有这个字段；从旧版导入数据时，存下来的是旧版的人员 id，
+     * 新集里一个都对不上 —— 这两种情况都会让闹钟页「为谁写闹钟」一个都不高亮，
+     * 开关打开后闹钟也是写到一个空人身上（一个都不响）。所以这里补成当前人员。
+     */
+    private fun ensureAlarmPerson() {
+        val bound = alarmConfig.personId
+        if (bound != null && people.any { it.id == bound }) return
+        val fallback = activePersonId.ifEmpty { people.firstOrNull()?.id ?: "" }
+        val next = fallback.ifEmpty { null }
+        if (next == bound) return
+        alarmConfig = alarmConfig.copy(personId = next)
+        AlarmStore.save(alarmConfig)
     }
 
     /**
@@ -333,14 +345,8 @@ class IndexState(
      */
     fun reloadAfterMigrate() {
         loadBanOptions()
+        // loadPeople() 里的 ensureAlarmPerson() 会把指向旧版人员的闹钟绑定落回当前人员
         loadPeople()
-        // 闹钟绑的是旧版的人员 id，新集里没有就落到当前人员，
-        // 免得闹钟页「为谁写闹钟」一个都不高亮（响铃本身有兜底，不影响）
-        val boundAlarmPerson = alarmConfig.personId
-        if (boundAlarmPerson != null && people.none { it.id == boundAlarmPerson }) {
-            alarmConfig = alarmConfig.copy(personId = activePersonId.ifEmpty { null })
-            AlarmStore.save(alarmConfig)
-        }
         loadHolidayAndBanList()
         generateSchedule()
         ScheduleWidgetProvider.refresh(context)
@@ -912,6 +918,15 @@ class IndexState(
     }
 
     fun setAlarmEnabled(enabled: Boolean) {
+        // 先确认闹钟有个有效的人，再落盘：没有人的话闹钟写到空人身上，一个都不会响，
+        // 而开关却已经显示成打开，用户根本发现不了。
+        if (enabled) {
+            ensureAlarmPerson()
+            if (alarmConfig.personId.isNullOrEmpty()) {
+                toast("请先选择「为谁写闹钟」")
+                return
+            }
+        }
         alarmConfig = alarmConfig.copy(enabled = enabled)
         AlarmStore.save(alarmConfig)
         if (!enabled) {
@@ -927,9 +942,9 @@ class IndexState(
             requestExactAlarmPermission()
             return
         }
-        // 没有「后台弹出界面」时，后台/锁屏拉起响铃页会被系统拦掉（铃声照响，只是不弹页面）
+        // 没有悬浮窗权限时，后台/锁屏拉起响铃页会被系统拦掉（铃声照响，只是不弹页面）
         if (!com.bilu.paibanzhushou.alarm.AlarmNotifications.canDrawOverlays(context)) {
-            toast("请打开「后台弹出界面」，否则锁屏时不会弹出响铃页")
+            toast("请打开「悬浮窗」，否则锁屏时不会弹出响铃页")
             requestOverlayPermission()
         }
         // Android 14+：没有「全屏通知」权限时，闹钟到点只能弹通知、不会亮屏响铃
@@ -957,7 +972,7 @@ class IndexState(
             .onFailure { runCatching { context.startActivity(fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
 
-    /** 跳系统「后台弹出界面 / 显示在其他应用上层」开关页 */
+    /** 跳系统「悬浮窗 / 显示在其他应用上层」开关页 */
     private fun requestOverlayPermission() {
         val direct = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.packageName))
         val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
@@ -997,7 +1012,7 @@ class IndexState(
             !alarmConfig.enabled -> null
             !AlarmNotifications.canPost(context) -> "缺少通知权限，闹钟到点不会响"
             !AlarmNotifications.canDrawOverlays(context) ->
-                "没开「后台弹出界面」，锁屏或后台时不会弹出响铃页（铃声不受影响）"
+                "没开「悬浮窗」，锁屏或后台时不会弹出响铃页（铃声不受影响）"
             !AlarmNotifications.canUseFullScreen(context) -> "没开「全屏通知」，锁屏或后台时闹钟只会弹一条通知"
             else -> null
         }
@@ -1025,9 +1040,17 @@ class IndexState(
                 ),
                 AlarmPermission(
                     id = PERM_OVERLAY,
-                    title = "后台弹出界面（悬浮窗）",
+                    title = "悬浮窗",
                     desc = "允许后，App 在后台时会弹出全屏响铃页；铃声不需要它",
                     ok = AlarmNotifications.canDrawOverlays(context)
+                ),
+                AlarmPermission(
+                    id = PERM_BG_POPUP,
+                    title = "后台弹出界面",
+                    desc = "悬浮窗开了还要单独允许「后台弹出界面」（荣耀 / 华为等机型在应用管理里），" +
+                        "否则锁屏或后台时不弹出响铃页。此项无法自动检测，请手动确认已允许",
+                    ok = false,
+                    hintOnly = true
                 ),
                 AlarmPermission(
                     id = PERM_FSI,
@@ -1092,6 +1115,8 @@ class IndexState(
                 app
             )
             // 国产 ROM 的「自启动 / 后台运行」没有统一入口，逐个试各家的设置页，都打不开就落到应用详情
+            // 「后台弹出界面」是厂商私有开关，没有可直达的页面，只落到应用详情让用户自己找
+            PERM_BG_POPUP -> listOf(app)
             PERM_AUTOSTART -> autostartIntents() + app
             else -> listOf(app)
         }

@@ -360,6 +360,7 @@ fun AlarmSettingsScreen(
             SectionLabel("闹钟权限", topMargin = Rpx.dp(28))
             Text(
                 text = "下面这些开关决定闹钟能不能准点响、能不能亮屏弹出响铃页。" +
+                    "「悬浮窗」和「后台弹出界面」是两项不同的开关，都要允许。" +
                     "荣耀 / 华为等机型还要允许「自启动」「后台运行」，否则划掉后台后闹钟不响",
                 fontSize = Rpx.sp(21),
                 color = C.hint,
@@ -367,10 +368,16 @@ fun AlarmSettingsScreen(
                 modifier = Modifier.padding(top = Rpx.dp(8))
             )
             val perms = state.alarmPermissions
-            // hintOnly 的项（自启动 / 后台运行）没法自动检测，不计入「没开启」的数量
+            // hintOnly 的项（后台弹出界面、自启动 / 后台运行）没法自动检测，不计入「没开启」的数量
             val missing = perms.count { !it.ok && !it.hintOnly }
+            // 还有「去确认」的项时别说「全部已开启」：那些项查不到，说满了反而误导
+            val hasHintOnly = perms.any { it.hintOnly }
             Text(
-                text = if (missing == 0) "全部已开启，闹钟可以正常响" else "还有 " + missing + " 项没开启",
+                text = when {
+                    missing > 0 -> "还有 " + missing + " 项没开启"
+                    hasHintOnly -> "可检测的权限都已开启，带「去确认」的请手动确认"
+                    else -> "全部已开启，闹钟可以正常响"
+                },
                 fontSize = Rpx.sp(22),
                 color = if (missing == 0) Color(0xFF43A047) else Color(0xFFE53935),
                 fontWeight = FontWeight.Medium,
