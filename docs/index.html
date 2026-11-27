@@ -13,8 +13,41 @@
 <link rel="icon" href="./img/icon.png">
 <link rel="apple-touch-icon" href="./img/icon.png">
 <link rel="stylesheet" href="./style.css">
+<style>
+/* 微信内置浏览器不能直接安装 APK（会拦下载），这里做一次明确引导 */
+.wx-tip{position:fixed;inset:0;z-index:200;display:none;background:rgba(6,12,28,.76);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.wx-tip.on{display:block}
+.wx-tip .wx-hand{position:absolute;top:calc(8px + env(safe-area-inset-top));right:12px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;pointer-events:none}
+.wx-tip .wx-badge{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;background:#fff;color:#1d2433;font-size:13px;font-weight:600;box-shadow:0 8px 22px rgba(0,0,0,.22)}
+.wx-tip .wx-badge i{font-style:normal;letter-spacing:1px}
+.wx-tip svg.wx-arrow{width:52px;height:54px;margin-right:26px;color:#fff;opacity:.9;animation:wx-bob 1.5s ease-in-out infinite}
+@keyframes wx-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.wx-tip .wx-card{position:absolute;left:16px;right:16px;bottom:calc(24px + env(safe-area-inset-bottom));padding:20px 18px 14px;border-radius:18px;background:rgba(255,255,255,.985);box-shadow:0 18px 48px rgba(0,0,0,.3)}
+.wx-tip h3{margin:0 0 8px;font-size:17px;line-height:1.4;color:#1d2433}
+.wx-tip p{margin:0 0 14px;font-size:13px;line-height:1.75;color:#5b6472}
+.wx-tip p b{color:#2f7bff;font-weight:600}
+.wx-tip .wx-btn{display:block;width:100%;height:46px;border:0;border-radius:12px;background:linear-gradient(93deg,#4a90e2,#5cc8a8);color:#fff;font-size:15px;font-weight:600;letter-spacing:.3px}
+.wx-tip .wx-later{display:block;width:100%;height:38px;margin-top:6px;border:0;background:transparent;color:#8a93a3;font-size:13px}
+@media (min-width:760px){.wx-tip .wx-card{left:50%;right:auto;width:420px;transform:translateX(-50%)}}
+</style>
 </head>
 <body>
+
+<div id="wx-tip" class="wx-tip" role="dialog" aria-modal="true" aria-label="在浏览器中打开">
+  <div class="wx-hand">
+    <span class="wx-badge"><i>···</i> 在浏览器打开</span>
+    <svg class="wx-arrow" viewBox="0 0 52 54" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M5 49C12 32 24 18 42 9"/>
+      <path d="M31 7l12 1-2 12"/>
+    </svg>
+  </div>
+  <div class="wx-card">
+    <h3>微信里装不了，请在浏览器里打开</h3>
+    <p>微信内置浏览器会拦掉 APK 下载。点右上角的 <b>···</b>，选「<b>在浏览器打开</b>」，就能直接下载安装了。</p>
+    <button type="button" class="wx-btn" id="wx-copy">复制网址，粘到浏览器里打开</button>
+    <button type="button" class="wx-later" id="wx-ok">我先看看介绍</button>
+  </div>
+</div>
 
 <header class="nav">
   <div class="wrap nav-inner">
@@ -29,18 +62,18 @@
       <a href="#download">下载</a>
       <a href="#faq">常见问题</a>
     </nav>
-    <a class="nav-cta" href="https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.39.apk">下载 APK</a>
+    <a class="nav-cta" href="https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.40.apk">下载 APK</a>
   </div>
 </header>
 
 <main>
   <div class="wrap hero">
     <div>
-      <span class="eyebrow"><span class="dot"></span>Android 原生版 · v1.0.39</span>
+      <span class="eyebrow"><span class="dot"></span>Android 原生版 · v1.0.40</span>
       <h1>把排班表<br><span class="grad">装进手机日历</span></h1>
       <p class="lead">设置一次「排班周期 + 锚点日期」，之后每一天的班次都会自动排好。<em>任意年份</em>都能翻，<em>多个人</em>一起管，还能一键对比同事这个月都上什么班。</p>
       <div class="actions">
-        <a class="btn" href="https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.39.apk">
+        <a class="btn" href="https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.40.apk">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M5 21h14"/></svg>
           下载 Android 版
         </a>
@@ -191,18 +224,18 @@
       <div class="download reveal">
         <h2>下载班表小历</h2>
         <p>Android 原生版本，安装包约 8.4 MB。免费使用，无广告、无内购、无需注册。</p>
-        <a class="btn" href="https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.39.apk">
+        <a class="btn" href="https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.40.apk">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M5 21h14"/></svg>
-          下载 banbiaoxiaoli-1.0.39.apk
+          下载 banbiaoxiaoli-1.0.40.apk
         </a>
         <div class="dl-meta">
-          <span>版本 1.0.39（versionCode 139）</span>
-          <span>8,806,779 字节</span>
+          <span>版本 1.0.40（versionCode 140）</span>
+          <span>8,806,775 字节</span>
           <span>Android 7.0+</span>
           <span>正式签名版</span>
         </div>
-        <div class="hash">SHA-256：6C02BB24F147C1E52712DCC046D829EA0FD5A0A185CBD15F72A247778E940577</div>
-        <div class="hash">下载不了？走 <a href="https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.39/banbiaoxiaoli-1.0.39.apk">GitHub 备用线路</a>，或从 <a href="https://yueqiwu.github.io/paibanzhushou/">GitHub Pages 镜像站</a> 下载。</div>
+        <div class="hash">SHA-256：66BAAEC1209942925062F65171ABCE5669ABAF34D9FA0E908577E6C81CE1BF68</div>
+        <div class="hash">下载不了？走 <a href="https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.40/banbiaoxiaoli-1.0.40.apk">GitHub 备用线路</a>，或从 <a href="https://yueqiwu.github.io/paibanzhushou/">GitHub Pages 镜像站</a> 下载。</div>
       </div>
     </div>
   </section>
@@ -279,6 +312,39 @@
       });
     }, { rootMargin: '0px 0px -8% 0px', threshold: 0.06 });
     items.forEach(function (el) { io.observe(el); });
+  })();
+</script>
+<script>
+  (function () {
+    var tip = document.getElementById('wx-tip');
+    if (!tip) return;
+    // 只在微信内置浏览器里提示；同一个会话里关过一次就不再挡
+    if (!/MicroMessenger/i.test(navigator.userAgent)) return;
+    try { if (sessionStorage.getItem('wx-tip-ack') === '1') return; } catch (e) {}
+    tip.classList.add('on');
+    function ack() { try { sessionStorage.setItem('wx-tip-ack', '1'); } catch (e) {} tip.classList.remove('on'); }
+    var ok = document.getElementById('wx-ok');
+    if (ok) ok.addEventListener('click', ack);
+    var copy = document.getElementById('wx-copy');
+    if (copy) copy.addEventListener('click', function () {
+      var url = location.href.split('#')[0];
+      function done() { copy.textContent = '已复制，去浏览器粘贴打开'; ack(); }
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.top = '-100px';
+        document.body.appendChild(ta);
+        ta.select();
+        var okCopy = false;
+        try { okCopy = document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        if (okCopy) done(); else copy.textContent = url;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done, fallback);
+      } else { fallback(); }
+    });
   })();
 </script>
 </body>

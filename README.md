@@ -9,7 +9,7 @@ Kotlin + Jetpack Compose 实现，无第三方运行时依赖——持久化用 
 JSON 用 org.json，农历/节气/节假日全部本地算。
 
 - 包名 / applicationId：`com.bilu.paibanzhushou`
-- 当前发布版本：**versionName 1.0.39，versionCode 139**
+- 当前发布版本：**versionName 1.0.40，versionCode 140**
 - minSdk 24（Android 7.0），targetSdk 37，Compose Material3
 
 ## 功能
@@ -24,21 +24,23 @@ JSON 用 org.json，农历/节气/节假日全部本地算。
 - **农历 · 节气 · 节日**：每个格子里有农历日期、传统节日、二十四节气、公历节日；法定节假日标「假」，调休上班标「班」
 - **同事排班对比表**：一张表看完所有人的整月班次，左右滑动看全员，上下滑动看整月，今天一行自动高亮并滚动到眼前
 - **班次闹钟**：勾选要提醒的班次、给每个班次单独设时间，写入系统精确闹钟；到点全屏响铃页 + 循环铃声 + 震动 + 关闭 / 5 分钟后提醒；改排班、重启手机都会自动重写；权限缺失时逐项标出去处，机型不允许自动跳转时弹说明框并给出手动设置路径
-- **闹钟列表**：看清未来 60 天每天会不会响，可单独取消某一天（改排班、开机都不会把它加回来）
+- **闹钟列表**：看清未来 60 天每天会不会响，页头按各班次自己的时间说明；可单独取消某一天，取消后收在上方「已取消」里，随时能恢复（改排班、开机都不会把它加回来）；返回回到「闹钟设置」
 - **桌面小组件**：4×2 大卡（7 天横排）、2×1 小卡（4 上 3 下）、2×1 今日班次卡（所有人员今天的班次，一人一列，最多并排 5 人，超出显示 +N；人少时字与胶囊自动放大），换人、改排班后自动刷新
 - **从旧版导入**：旧版（uni-app 版）点「把数据转过去」→ 深链跳转确认导入；跳转被系统拦掉时走「排班设置 → 展开 → 从剪贴板导入」。导入前会列出对方人员与锚点日期，导入时整份覆盖并留一份快照，页面底部可「恢复导入前的数据」；引导只在原生版还没数据时出现，点「稍后」不再重复弹
+- **导出 / 导入数据**：排班设置展开区底部「导出数据」把人员、班次、周期、单日调整、闹钟设置整份复制成一条链接，换机时在新手机点「从剪贴板导入旧版数据」即可恢复（导入前自动备份当前数据）
+- **官网入口**：页脚「官网」直接打开下载页；官网检测到在微信里打开时会提示改用浏览器，并可一键复制网址
 - **本地保存，不上传**：排班数据只在你手机里，不注册、不登录、不联网也能看（除节假日标记外无需网络）；仅每天首次打开时匿名上报一次随机安装标识 + 日期 + 版本号，用于统计使用人数，不含任何排班或个人信息
 
 ## 下载 / 官网
 
 | | |
 | --- | --- |
-| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.39.apk>（8,806,779 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.39/banbiaoxiaoli-1.0.39.apk> |
+| 下载 APK | <https://qipaclub.top/paibanzhushou/banbiaoxiaoli-1.0.40.apk>（8,806,775 字节）｜备用：<https://github.com/yueqiwu/paibanzhushou/releases/download/v1.0.40/banbiaoxiaoli-1.0.40.apk> |
 | 官网（自有域名） | <https://qipaclub.top/paibanzhushou/> |
 | 官网（GitHub Pages） | <https://yueqiwu.github.io/paibanzhushou/> |
 | 源码 | <https://github.com/yueqiwu/paibanzhushou> |
-| 版本 / Release | v1.0.39（versionCode 139，正式签名） |
-| 包校验 | SHA-256 `6C02BB24F147C1E52712DCC046D829EA0FD5A0A185CBD15F72A247778E940577` |
+| 版本 / Release | v1.0.40（versionCode 140，正式签名） |
+| 包校验 | SHA-256 `66BAAEC1209942925062F65171ABCE5669ABAF34D9FA0E908577E6C81CE1BF68` |
 
 官网源码就是本仓库的 `docs/` 目录（纯静态 `index.html` + `style.css` + `img/`，全部相对路径），
 可直接整目录拷到任意静态站点的子路径下，例如 `qipaclub.top/paibanzhushou/`。

@@ -43,18 +43,23 @@ object Migrate {
     /** 旧版包名 */
     const val LEGACY_PACKAGE = "com.paibanzhushou.wyq"
 
-    private const val LINK_PREFIX = "paibanzhushou://migrate?d="
-    private const val SUPPORTED_VERSION = 1
+    internal const val LINK_PREFIX = "paibanzhushou://migrate?d="
+    internal const val SUPPORTED_VERSION = 1
 
-    /** 需要迁移的键：与 utils/migrate.js 的 MIGRATE_KEYS 一一对应 */
-    private val ALLOWED_KEYS = listOf(
+    /**
+     * 需要迁移 / 备份的键：与 utils/migrate.js 的 MIGRATE_KEYS 一一对应。
+     * Backup 导出复用同一份白名单，所以在这里加键 = 导入导出同时生效。
+     * paiban_alarm_v1 是 1.0.40 补的：漏了它换机会丢掉闹钟设置。
+     */
+    internal val ALLOWED_KEYS = listOf(
         "paiban_people_v1",
         "paiban_active_person_v1",
         "paiban_config_v1",
         "PAIBAN_OPTIONS_KEY",
         "paiban_options_version_v1",
         "paiban_member_table_month_v1",
-        "paiban_holiday_ban_v1"
+        "paiban_holiday_ban_v1",
+        "paiban_alarm_v1"
     )
 
     private const val PEOPLE_KEY = "paiban_people_v1"

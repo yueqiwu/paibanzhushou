@@ -108,9 +108,12 @@ import androidx.core.content.ContextCompat
 import com.bilu.paibanzhushou.R
 import com.bilu.paibanzhushou.core.Dates
 import com.bilu.paibanzhushou.core.Schedule
+import com.bilu.paibanzhushou.data.Backup
 import com.bilu.paibanzhushou.data.Migrate
 import com.bilu.paibanzhushou.data.Person
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import kotlin.math.roundToInt
 
 /**
@@ -696,6 +699,7 @@ private fun ConfigBody(
     onConfettiOrigin: (Offset) -> Unit,
     onImportLegacy: () -> Unit
 ) {
+    val context = LocalContext.current
     val nameFocus = remember { FocusRequester() }
     var showAnchorPicker by remember { mutableStateOf(false) }
 
@@ -855,22 +859,49 @@ private fun ConfigBody(
             }
         }
 
-        // 旧版数据导入入口：首启引导点过「稍后」之后，用户仍能在这里找回来
+        // 数据搬运：导出（备份 / 换机）与从旧版导入，两个入口并排
+        Row(
+            Modifier.fillMaxWidth().padding(top = Rpx.dp(20)),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "导出数据 ›",
+                fontSize = Rpx.sp(22),
+                color = C.blue,
+                modifier = Modifier
+                    .clickable {
+                        val export = Backup.build()
+                        if (export == null) {
+                            state.toastMsg("还没有可导出的数据")
+                        } else if (Backup.copyToClipboard(context, export.link)) {
+                            state.toastMsg(
+                                "已复制备份数据（" + export.people + " 位人员），" +
+                                    "到新手机点「从剪贴板导入旧版数据」即可恢复"
+                            )
+                        } else {
+                            state.toastMsg("复制失败，请重试")
+                        }
+                    }
+                    .padding(vertical = Rpx.dp(2))
+            )
+            // 旧版数据导入入口：首启引导点过「稍后」之后，用户仍能在这里找回来
+            Text(
+                text = "从剪贴板导入旧版数据 ›",
+                fontSize = Rpx.sp(22),
+                color = C.blue,
+                modifier = Modifier
+                    .clickable { onImportLegacy() }
+                    .padding(vertical = Rpx.dp(2))
+            )
+        }
         Text(
-            text = "从剪贴板导入旧版数据 ›",
-            fontSize = Rpx.sp(22),
-            color = C.blue,
-            modifier = Modifier
-                .padding(top = Rpx.dp(20))
-                .clickable { onImportLegacy() }
-                .padding(vertical = Rpx.dp(2))
-        )
-        Text(
-            text = "在旧版里复制迁移数据后点这里，导入前会自动备份当前数据",
+            text = "「导出数据」把人员、班次、周期、单日调整和闹钟设置复制到剪贴板；" +
+                "换机时在新手机点「从剪贴板导入旧版数据」，导入前会自动备份当前数据",
             fontSize = Rpx.sp(19),
             color = C.hint,
             lineHeight = Rpx.sp(28),
-            modifier = Modifier.padding(top = Rpx.dp(4))
+            modifier = Modifier.padding(top = Rpx.dp(6))
         )
     }
 
@@ -1031,12 +1062,27 @@ private fun RestSettingRow(
 
 /* ---------------- 版权 ---------------- */
 
+/** 官网：App 内留一个入口，能看到更新说明、也能直接把下载页发给别人 */
+private const val WEBSITE_URL = "https://qipaclub.top/paibanzhushou/"
+
+/** 用系统浏览器打开官网；个别精简 ROM 没有浏览器时给提示，而不是点了没反应 */
+private fun openWebsite(state: IndexState, context: android.content.Context) {
+    val ok = runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(WEBSITE_URL))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }.isSuccess
+    if (!ok) state.toastMsg("没有找到可用的浏览器")
+}
+
 @Composable
 private fun CopyrightFooter(
     state: IndexState,
     onImportLegacy: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     // 导入过旧版数据时留了个撤销口：误点导入还能把导入前的数据恢复回来。
     // 只在新导入后的 24 小时内提示一次（同一份快照不重复提示），用户可以点「关闭」永久收起。
     var showRestoreHint by remember { mutableStateOf(false) }
@@ -1135,6 +1181,18 @@ private fun CopyrightFooter(
                         .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
                 )
             }
+            // 官网入口：换机、看更新说明、把下载页发给朋友都用得上
+            Text(
+                text = "官网 ›",
+                fontSize = Rpx.sp(19),
+                color = Color(0xCC4A90E2),
+                maxLines = 1,
+                modifier = Modifier
+                    .padding(top = Rpx.dp(6))
+                    .clip(RoundedCornerShape(Rpx.dp(8)))
+                    .clickable { openWebsite(state, context) }
+                    .padding(horizontal = Rpx.dp(4), vertical = Rpx.dp(2))
+            )
         }
     }
 

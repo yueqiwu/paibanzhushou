@@ -163,13 +163,15 @@ fun AppRoot() {
                         }
                     }
                     "alarms" -> {
+                        // 闹钟列表是从「闹钟设置」进来的，返回就回到闹钟设置，
+                        // 不要弹回首页（1.0.39 及以前一律 route = "index"）
                         AlarmListScreen(state = indexState, onBack = {
                             indexState.onShow()
-                            route = "index"
+                            route = "alarmSettings"
                         })
                         BackHandler {
                             indexState.onShow()
-                            route = "index"
+                            route = "alarmSettings"
                         }
                     }
                     "member" -> {

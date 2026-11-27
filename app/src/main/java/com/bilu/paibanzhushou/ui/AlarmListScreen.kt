@@ -46,11 +46,14 @@ fun AlarmListScreen(state: IndexState, onBack: () -> Unit) {
     val context = LocalContext.current
     var tick by remember { mutableIntStateOf(0) }
     val config = state.alarmConfig
-    val entries: List<AlarmEntry> = remember(tick, config.enabled, config.hour, config.minute) {
+    val entries: List<AlarmEntry> = remember(tick, config.enabled, config.hour, config.minute, config.times) {
         if (!config.enabled) emptyList() else ShiftAlarm.writtenEntries(context, config)
     }
-    val skipped: List<String> = remember(tick, config.enabled) { ShiftAlarm.skippedEntries(context) }
     val todayStr = Dates.formatYmd(Dates.todayStart())
+    // 「已取消」只保留还没到点的日子：过去的日子已经不会再响，留着「恢复」按钮只会让人误以为没恢复成功
+    val skipped: List<String> = remember(tick, config.enabled) {
+        ShiftAlarm.skippedEntries(context).filter { it.substringBefore("#") >= todayStr }
+    }
     val upcoming = entries.filter { it.date >= todayStr }
 
     Column(
@@ -100,8 +103,10 @@ fun AlarmListScreen(state: IndexState, onBack: () -> Unit) {
                 color = C.textPrimary
             )
             Text(
-                text = if (config.bans.size <= 1) {
-                    "每天 " + pad2(config.hour) + ":" + pad2(config.minute) +
+                // 1.0.23 起每个班次可以有自己的响铃时间，摘要必须读 config.times（timeTextOf），
+                // 不能再读 1.0.22 及以前的单一 hour/minute，否则「值班 07:40」的页面顶部会写成 08:00
+                text = if (config.bans.size == 1) {
+                    "每天 " + config.timeTextOf(config.bans.first()) +
                         " 响铃；取消某一天后，改排班、开机都不会把它加回来"
                 } else {
                     "各班次按自己的时间响铃：" +
@@ -113,48 +118,6 @@ fun AlarmListScreen(state: IndexState, onBack: () -> Unit) {
                 lineHeight = Rpx.sp(32),
                 modifier = Modifier.padding(top = Rpx.dp(8))
             )
-        }
-
-        if (upcoming.isEmpty()) {
-            Text(
-                text = if (config.enabled) "未来 " + config.horizonDays + " 天里没有选中班次的日子" else "闹钟开关没打开",
-                fontSize = Rpx.sp(23),
-                color = C.hint,
-                modifier = Modifier.padding(start = Rpx.dp(30), top = Rpx.dp(26))
-            )
-        } else {
-            SectionLabel("即将响铃", topMargin = Rpx.dp(26))
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Rpx.dp(24))
-                    .glassCard(radius = Rpx.dp(20), bgAlpha = 0.88f)
-                    .padding(vertical = Rpx.dp(6))
-            ) {
-                upcoming.forEachIndexed { index, e ->
-                    AlarmRow(
-                        entry = e,
-                        color = hexColor(state.banColor(e.ban)),
-                        actionText = "取消",
-                        actionColor = Color(0xFFE53935),
-                        onAction = {
-                            ShiftAlarm.cancelSingle(context, e.date, e.ban)
-                            state.resyncAlarms()
-                            tick++
-                            state.toastMsg("已取消 " + e.date + " 的闹钟")
-                        }
-                    )
-                    if (index != upcoming.lastIndex) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(start = Rpx.dp(20))
-                                .height(Rpx.dp(1))
-                                .background(Color(0x0F000000))
-                        )
-                    }
-                }
-            }
         }
 
         if (skipped.isNotEmpty()) {
@@ -194,6 +157,48 @@ fun AlarmListScreen(state: IndexState, onBack: () -> Unit) {
                 }
             }
         }
+        if (upcoming.isEmpty()) {
+            Text(
+                text = if (config.enabled) "未来 " + config.horizonDays + " 天里没有选中班次的日子" else "闹钟开关没打开",
+                fontSize = Rpx.sp(23),
+                color = C.hint,
+                modifier = Modifier.padding(start = Rpx.dp(30), top = Rpx.dp(26))
+            )
+        } else {
+            SectionLabel("即将响铃", topMargin = Rpx.dp(26))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Rpx.dp(24))
+                    .glassCard(radius = Rpx.dp(20), bgAlpha = 0.88f)
+                    .padding(vertical = Rpx.dp(6))
+            ) {
+                upcoming.forEachIndexed { index, e ->
+                    AlarmRow(
+                        entry = e,
+                        color = hexColor(state.banColor(e.ban)),
+                        actionText = "取消",
+                        actionColor = Color(0xFFE53935),
+                        onAction = {
+                            ShiftAlarm.cancelSingle(context, e.date, e.ban)
+                            state.resyncAlarms()
+                            tick++
+                            state.toastMsg("已取消 " + e.date + " 的闹钟，可在上方「已取消」里恢复")
+                        }
+                    )
+                    if (index != upcoming.lastIndex) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(start = Rpx.dp(20))
+                                .height(Rpx.dp(1))
+                                .background(Color(0x0F000000))
+                        )
+                    }
+                }
+            }
+        }
+
     }
 }
 
